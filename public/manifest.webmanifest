@@ -1,0 +1,47 @@
+{
+  "name": "ARA TRADES",
+  "short_name": "ARA",
+  "description": "Realtime signalen, bots en alarmen — een tap trade uitvoeren.",
+  "start_url": "/?src=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0f14",
+  "theme_color": "#0b0f14",
+  "categories": ["finance", "productivity"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Neem laatste signaal",
+      "short_name": "Signaal",
+      "description": "Open direct het nieuwste trade-setup met 1-tap uitvoeren",
+      "url": "/trade/latest?src=shortcut",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Alarmen",
+      "short_name": "Alarmen",
+      "description": "Beheer je entry, TP en SL alarmen",
+      "url": "/?tab=alarms&src=shortcut",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Mijn Bots",
+      "short_name": "Bots",
+      "description": "Bekijk status van je 24/7 bots",
+      "url": "/?tab=bots&src=shortcut",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Nieuws",
+      "short_name": "Nieuws",
+      "description": "Economische kalender met nowcast",
+      "url": "/?tab=news&src=shortcut",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
