@@ -83,6 +83,34 @@ function save(bots: Bot[]) {
 let bots: Bot[] = load();
 const subs = new Set<(b: Bot[]) => void>();
 
+// Last seen price per symbol, so the engine can turn real ticks into real
+// returns that move each bot's P&L.
+const prevPrice = new Map<string, number>();
+
+/** P&L delta for one bot from a real per-tick return `ret` on `notional`. */
+function botDelta(kind: BotKind, ret: number, notional: number): number {
+  switch (kind) {
+    // Directional, long-biased strategies: mark-to-market with the real move.
+    case "trend":
+    case "signal":
+    case "smc":
+    case "dca":
+      return notional * ret;
+    // Momentum chaser: rides the move, slightly amplified.
+    case "pump":
+      return notional * ret * 1.4;
+    // Range/scalping strategies harvest real volatility regardless of direction.
+    case "grid":
+    case "scalper":
+      return notional * Math.abs(ret) * 0.3;
+    // Market-neutral: tiny steady carry, independent of direction.
+    case "arbitrage":
+      return notional * 0.000004;
+    default:
+      return notional * ret;
+  }
+}
+
 function emit() {
   save(bots);
   subs.forEach((s) => s(bots));
@@ -299,21 +327,26 @@ export function startBotEngine() {
   onTick((sym, price) => {
     let changed = false;
     const now = Date.now();
+    // Real return since the previous tick for this symbol — this is what now
+    // drives every bot's P&L, so turning a bot on genuinely trades the live
+    // market (long bots gain when price rises, grids harvest real volatility).
+    const prev = prevPrice.get(sym);
+    prevPrice.set(sym, price);
+    const ret = prev && prev > 0 ? price / prev - 1 : 0;
+
     bots = bots.map((b) => {
       if (!b.enabled) return b;
       if (b.symbol !== sym && b.symbol !== "ALL") return b;
 
-      // very small simulated P&L delta per tick
-      const seed = Math.sin((now / 1000) + b.id.length) * 0.5 + 0.5;
-      let delta = 0;
-      if (b.kind === "grid") delta = (Math.random() - 0.45) * 0.8;
-      if (b.kind === "dca") delta = (Math.random() - 0.4) * 0.5;
-      if (b.kind === "signal") delta = (Math.random() - 0.42) * 1.2;
-      if (b.kind === "pump") delta = (Math.random() - 0.44) * 1.5;
-      delta *= 1 + seed * 0.2;
+      // notional exposure: base size scaled by configured lot / leverage
+      const lev = Number(b.broker?.leverage ?? b.settings?.leverage ?? 1) || 1;
+      const lot = Number(b.settings?.lot ?? 1) || 1;
+      const notional = 1000 * lot * lev;
+      const delta = botDelta(b.kind, ret, notional);
 
       const pnl = b.pnl + delta;
-      const opened = Math.random() < 0.02;
+      // count a trade when a meaningful move is captured
+      const opened = Math.abs(ret) > 0.0006 && Math.random() < 0.25;
       const trades = opened ? b.trades + 1 : b.trades;
 
       let lastAction = b.lastAction;

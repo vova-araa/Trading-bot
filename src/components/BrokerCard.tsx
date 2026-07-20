@@ -7,6 +7,7 @@ import {
   hasCredentials, isUnlocked, loadCredentials, lock, removeCredentials,
   saveCredentials, unlock,
 } from "@/lib/broker-vault";
+import { TradingViewWebhookCard } from "@/components/TradingViewWebhookCard";
 
 export function BrokerList() {
   const [state, setState] = useState(() => getBrokerState());
@@ -25,6 +26,20 @@ export function BrokerList() {
 
   return (
     <div className="flex flex-col gap-3">
+      <TradingViewWebhookCard />
+      <div className="panel px-3 py-2.5">
+        <div className="mono text-[10px] uppercase tracking-widest text-primary">
+          Zo werkt koppelen
+        </div>
+        <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+          <b className="text-bull">Marktdata</b> is live gekoppeld (Binance + Yahoo/Stooq).{" "}
+          <b className="text-foreground">TradingView</b> voert automatisch uit via de webhook
+          hierboven — jouw gedeployde bots pikken elk alert op.{" "}
+          <b className="text-foreground">cTrader / MetaTrader</b>: sla je API-keys hieronder
+          versleuteld op; directe order-executie naar die accounts vereist nog een trading-backend
+          (cTrader Open API / MetaApi) — de webhook-route is waar die koppeling inplugt.
+        </p>
+      </div>
       <VaultBar unlocked={unlocked} onUnlockClick={() => setShowUnlock(true)} onLock={lock} />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {BROKERS.map((b) => (
