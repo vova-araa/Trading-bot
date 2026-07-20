@@ -38,13 +38,16 @@ export function TradingChart({
   timeframe,
   indicators,
   priceLines,
+  fibZone,
 }: {
   symbolId: string;
   timeframe: Timeframe;
   indicators: IndicatorFlags;
   priceLines?: ChartPriceLine[];
+  fibZone?: { top: number; bottom: number } | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const fibOverlayRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const volRef = useRef<ISeriesApi<"Histogram"> | null>(null);
@@ -180,6 +183,37 @@ export function TradingChart({
   useEffect(() => {
     refreshOverlays();
   }, [indicators]);
+
+  // Golden-pocket shaded box: track the two prices as pixel coords each frame so
+  // the band stays glued to the chart through any pan/zoom.
+  useEffect(() => {
+    const el = fibOverlayRef.current;
+    if (!el) return;
+    if (!fibZone) {
+      el.style.display = "none";
+      return;
+    }
+    let raf = 0;
+    const paint = () => {
+      const series = candleRef.current;
+      if (series && fibZone) {
+        const yTop = series.priceToCoordinate(fibZone.top);
+        const yBot = series.priceToCoordinate(fibZone.bottom);
+        if (yTop != null && yBot != null) {
+          const top = Math.min(yTop, yBot);
+          const h = Math.abs(yBot - yTop);
+          el.style.display = "block";
+          el.style.top = `${top}px`;
+          el.style.height = `${h}px`;
+        } else {
+          el.style.display = "none";
+        }
+      }
+      raf = requestAnimationFrame(paint);
+    };
+    raf = requestAnimationFrame(paint);
+    return () => cancelAnimationFrame(raf);
+  }, [fibZone, symbolId, timeframe]);
 
   // Draw entry / SL / TP price lines from the order ticket + open positions.
   useEffect(() => {
@@ -355,6 +389,16 @@ export function TradingChart({
     <div className="relative h-full w-full">
       <div ref={containerRef} className="absolute inset-0" />
       <div ref={vpOverlayRef} className="pointer-events-none absolute inset-0" />
+      {/* Golden-pocket shaded band (OTE) — positioned by the rAF effect */}
+      <div
+        ref={fibOverlayRef}
+        className="pointer-events-none absolute left-0 right-14 hidden"
+        style={{
+          background: "rgba(245,194,107,0.14)",
+          borderTop: "1px solid rgba(245,194,107,0.45)",
+          borderBottom: "1px solid rgba(34,209,140,0.45)",
+        }}
+      />
 
       {/* Nieuws-toggle */}
       <button

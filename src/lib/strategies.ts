@@ -1,6 +1,13 @@
 import type { Candle } from "./market-data";
 import { ema, rsi, macd, bollinger, atr } from "./indicators";
 
+export type FibLine = { label: string; price: number; color: string };
+export type FibOverlay = {
+  zoneTop: number; // 0.618 (higher price edge of the golden pocket)
+  zoneBottom: number; // 0.786 (deeper edge)
+  lines: FibLine[];
+};
+
 export type Setup = {
   id: string;
   symbol: string;
@@ -13,7 +20,17 @@ export type Setup = {
   confidence: number; // 0-100
   reason: string;
   time: number;
+  fib?: FibOverlay; // fib retracement to draw on the chart (OTE strategy)
 };
+
+// Golden-pocket palette (matches the shared TradingView setup).
+const FIB_COLORS = {
+  f618: "#f5c26b",
+  f650: "#e8b84b",
+  f705: "#5cc8ff",
+  f786: "#22d18c",
+  f886: "#ef5a5a",
+} as const;
 
 export type Strategy = {
   id: string;
@@ -243,6 +260,17 @@ export const STRATEGIES: Strategy[] = [
             reason: "Retrace in golden pocket (0.618–0.786) — long richting swing high",
             time: c[l].time,
             strategy: "OTE Golden Pocket",
+            fib: {
+              zoneTop: zTop,
+              zoneBottom: zBot,
+              lines: [
+                { label: "0.618", price: zTop, color: FIB_COLORS.f618 },
+                { label: "0.65", price: H - 0.65 * r, color: FIB_COLORS.f650 },
+                { label: "0.705", price: eq, color: FIB_COLORS.f705 },
+                { label: "0.786", price: zBot, color: FIB_COLORS.f786 },
+                { label: "0.886", price: f886, color: FIB_COLORS.f886 },
+              ],
+            },
           };
         }
       }
@@ -274,6 +302,17 @@ export const STRATEGIES: Strategy[] = [
             reason: "Retrace in golden pocket (0.618–0.786) — short richting swing low",
             time: c[l].time,
             strategy: "OTE Golden Pocket",
+            fib: {
+              zoneTop: zTop,
+              zoneBottom: zBot,
+              lines: [
+                { label: "0.618", price: zBot, color: FIB_COLORS.f618 },
+                { label: "0.65", price: L + 0.65 * r, color: FIB_COLORS.f650 },
+                { label: "0.705", price: eq, color: FIB_COLORS.f705 },
+                { label: "0.786", price: zTop, color: FIB_COLORS.f786 },
+                { label: "0.886", price: f886, color: FIB_COLORS.f886 },
+              ],
+            },
           };
         }
       }

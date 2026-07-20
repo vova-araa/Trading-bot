@@ -7,6 +7,7 @@ import { subscribePositions, type Position, type Side } from "@/lib/positions";
 import {
   SYMBOLS,
   TIMEFRAMES,
+  buildCandles,
   currentPrice,
   formatPrice,
   dayChangePct,
@@ -14,6 +15,7 @@ import {
   onTick,
   type Timeframe,
 } from "@/lib/market-data";
+import { STRATEGIES, type FibOverlay } from "@/lib/strategies";
 
 const KINDS = ["all", "crypto", "forex", "metal", "index", "futures"] as const;
 type KindFilter = (typeof KINDS)[number];
@@ -63,13 +65,34 @@ export function ChartTradeTab() {
   const [price, setPrice] = useState(() => currentPrice(symbol));
   const [draft, setDraft] = useState<{ side: Side; sl: number; tp: number } | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
+  const [ote, setOte] = useState<{ fib: FibOverlay; side: Side; rr: number } | null>(null);
 
   useEffect(() => subscribePositions(setPositions), []);
+
+  // Live OTE detection for the charted symbol/timeframe → draw its golden pocket.
+  useEffect(() => {
+    const strat = STRATEGIES.find((s) => s.id === "ote-golden");
+    const so = SYMBOLS.find((s) => s.id === symbol);
+    if (!strat || !so) return;
+    const run = () => {
+      const setup = strat.detect(buildCandles(so, tf), symbol);
+      setOte(setup?.fib ? { fib: setup.fib, side: setup.side, rr: setup.rr } : null);
+    };
+    run();
+    const iv = setInterval(run, 2000);
+    return () => clearInterval(iv);
+  }, [symbol, tf]);
 
   // Entry / SL / TP lines drawn on the chart: draft levels from the ticket plus
   // every open position on this symbol.
   const priceLines = useMemo<ChartPriceLine[]>(() => {
     const lines: ChartPriceLine[] = [];
+    // Golden-pocket fib levels when an OTE setup is active on this symbol.
+    if (ote) {
+      for (const ln of ote.fib.lines) {
+        lines.push({ price: ln.price, color: ln.color, title: ln.label });
+      }
+    }
     if (draft) {
       lines.push({ price: draft.sl, color: "#ef5a5a", title: "SL", dashed: true });
       lines.push({ price: draft.tp, color: "#22d18c", title: "TP", dashed: true });
@@ -85,7 +108,9 @@ export function ChartTradeTab() {
       if (p.tp != null) lines.push({ price: p.tp, color: "#22d18c", title: "pos TP" });
     }
     return lines;
-  }, [draft, positions, symbol]);
+  }, [draft, positions, symbol, ote]);
+
+  const fibZone = ote ? { top: ote.fib.zoneTop, bottom: ote.fib.zoneBottom } : null;
 
   useEffect(() => saveLS(LS_SYM, symbol), [symbol]);
   useEffect(() => saveLS(LS_TF, tf), [tf]);
@@ -241,6 +266,24 @@ export function ChartTradeTab() {
         </div>
       </div>
 
+      {/* OTE signal banner */}
+      {ote && (
+        <div
+          className={`mono flex items-center justify-between rounded-md border px-3 py-1.5 text-[11px] ${
+            ote.side === "long"
+              ? "border-bull/50 bg-bull/10 text-bull"
+              : "border-bear/50 bg-bear/10 text-bear"
+          }`}
+        >
+          <span className="font-black uppercase tracking-wider">
+            🎯 OTE golden pocket · {ote.side === "long" ? "LONG" : "SHORT"}
+          </span>
+          <span className="text-muted-foreground">
+            entry 0.705 · zone 0.618–0.786 · R:R {ote.rr.toFixed(1)}
+          </span>
+        </div>
+      )}
+
       {/* Chart */}
       <div className="panel h-[46vh] min-h-[320px] overflow-hidden">
         <TradingChart
@@ -248,6 +291,7 @@ export function ChartTradeTab() {
           timeframe={tf}
           indicators={indicators}
           priceLines={priceLines}
+          fibZone={fibZone}
         />
       </div>
 
