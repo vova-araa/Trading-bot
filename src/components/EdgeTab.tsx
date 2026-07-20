@@ -3,6 +3,7 @@ import { SYMBOLS, formatPrice } from "@/lib/market-data";
 import { startFlowRadar, onFlow, recentFlow, symbolHeat, type FlowEvent } from "@/lib/flow-radar";
 import { getNextEvent, formatCountdown, type NewsItem } from "@/lib/news";
 import { PredictionMarkets } from "@/components/PredictionMarkets";
+import { CotPanel } from "@/components/CotPanel";
 
 function ago(t: number): string {
   const s = Math.floor((Date.now() - t) / 1000);
@@ -139,6 +140,8 @@ export function EdgeTab() {
           </div>
         )}
       </div>
+
+      <CotPanel />
 
       <PredictionMarkets />
     </div>

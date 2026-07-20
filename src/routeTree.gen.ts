@@ -19,6 +19,7 @@ import { Route as ApiMarketCandlesRouteImport } from './routes/api/market/candle
 import { Route as ApiMarketQuotesRouteImport } from './routes/api/market/quotes'
 import { Route as ApiNewsFeedRouteImport } from './routes/api/news/feed'
 import { Route as ApiEdgePredictionsRouteImport } from './routes/api/edge/predictions'
+import { Route as ApiEdgeCotRouteImport } from './routes/api/edge/cot'
 import { Route as ApiWebhooksTradingviewRouteImport } from './routes/api/webhooks/tradingview'
 
 const ProRoute = ProRouteImport.update({
@@ -71,6 +72,11 @@ const ApiEdgePredictionsRoute = ApiEdgePredictionsRouteImport.update({
   path: '/api/edge/predictions',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiEdgeCotRoute = ApiEdgeCotRouteImport.update({
+  id: '/api/edge/cot',
+  path: '/api/edge/cot',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiWebhooksTradingviewRoute = ApiWebhooksTradingviewRouteImport.update({
   id: '/api/webhooks/tradingview',
   path: '/api/webhooks/tradingview',
@@ -88,6 +94,7 @@ export interface FileRoutesByFullPath {
   '/api/market/quotes': typeof ApiMarketQuotesRoute
   '/api/news/feed': typeof ApiNewsFeedRoute
   '/api/edge/predictions': typeof ApiEdgePredictionsRoute
+  '/api/edge/cot': typeof ApiEdgeCotRoute
   '/api/webhooks/tradingview': typeof ApiWebhooksTradingviewRoute
 }
 export interface FileRoutesByTo {
@@ -101,6 +108,7 @@ export interface FileRoutesByTo {
   '/api/market/quotes': typeof ApiMarketQuotesRoute
   '/api/news/feed': typeof ApiNewsFeedRoute
   '/api/edge/predictions': typeof ApiEdgePredictionsRoute
+  '/api/edge/cot': typeof ApiEdgeCotRoute
   '/api/webhooks/tradingview': typeof ApiWebhooksTradingviewRoute
 }
 export interface FileRoutesById {
@@ -115,6 +123,7 @@ export interface FileRoutesById {
   '/api/market/quotes': typeof ApiMarketQuotesRoute
   '/api/news/feed': typeof ApiNewsFeedRoute
   '/api/edge/predictions': typeof ApiEdgePredictionsRoute
+  '/api/edge/cot': typeof ApiEdgeCotRoute
   '/api/webhooks/tradingview': typeof ApiWebhooksTradingviewRoute
 }
 export interface FileRouteTypes {
@@ -130,6 +139,7 @@ export interface FileRouteTypes {
     | '/api/market/quotes'
     | '/api/news/feed'
     | '/api/edge/predictions'
+    | '/api/edge/cot'
     | '/api/webhooks/tradingview'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -143,6 +153,7 @@ export interface FileRouteTypes {
     | '/api/market/quotes'
     | '/api/news/feed'
     | '/api/edge/predictions'
+    | '/api/edge/cot'
     | '/api/webhooks/tradingview'
   id:
     | '__root__'
@@ -156,6 +167,7 @@ export interface FileRouteTypes {
     | '/api/market/quotes'
     | '/api/news/feed'
     | '/api/edge/predictions'
+    | '/api/edge/cot'
     | '/api/webhooks/tradingview'
   fileRoutesById: FileRoutesById
 }
@@ -170,6 +182,7 @@ export interface RootRouteChildren {
   ApiMarketQuotesRoute: typeof ApiMarketQuotesRoute
   ApiNewsFeedRoute: typeof ApiNewsFeedRoute
   ApiEdgePredictionsRoute: typeof ApiEdgePredictionsRoute
+  ApiEdgeCotRoute: typeof ApiEdgeCotRoute
   ApiWebhooksTradingviewRoute: typeof ApiWebhooksTradingviewRoute
 }
 
@@ -245,6 +258,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiEdgePredictionsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/edge/cot': {
+      id: '/api/edge/cot'
+      path: '/api/edge/cot'
+      fullPath: '/api/edge/cot'
+      preLoaderRoute: typeof ApiEdgeCotRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/webhooks/tradingview': {
       id: '/api/webhooks/tradingview'
       path: '/api/webhooks/tradingview'
@@ -266,6 +286,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMarketQuotesRoute: ApiMarketQuotesRoute,
   ApiNewsFeedRoute: ApiNewsFeedRoute,
   ApiEdgePredictionsRoute: ApiEdgePredictionsRoute,
+  ApiEdgeCotRoute: ApiEdgeCotRoute,
   ApiWebhooksTradingviewRoute: ApiWebhooksTradingviewRoute,
 }
 export const routeTree = rootRouteImport
