@@ -182,4 +182,103 @@ export const STRATEGIES: Strategy[] = [
       return null;
     },
   },
+  {
+    id: "ote-golden",
+    name: "OTE — Golden Pocket",
+    tagline: "Impuls + retrace in de 0.618–0.786 fib-zone, entry op 0.705",
+    attribution: "Inner Circle Trader — Optimal Trade Entry (Fibonacci golden pocket)",
+    detect(c, symbol) {
+      if (c.length < 40) return null;
+      const l = c.length - 1;
+      const atrVal = atr(c, 14)[l] ?? 0;
+      if (!atrVal) return null;
+
+      // Most recent swing high/low via k-bar fractals over a bounded lookback.
+      const k = 2;
+      const lb = Math.min(60, c.length - 2);
+      const w = c.slice(c.length - lb);
+      let hi: { i: number; p: number } | null = null;
+      let lo: { i: number; p: number } | null = null;
+      for (let i = k; i < w.length - k; i++) {
+        let isHi = true;
+        let isLo = true;
+        for (let j = i - k; j <= i + k; j++) {
+          if (j === i) continue;
+          if (w[j].high >= w[i].high) isHi = false;
+          if (w[j].low <= w[i].low) isLo = false;
+        }
+        if (isHi) hi = { i, p: w[i].high };
+        if (isLo) lo = { i, p: w[i].low };
+      }
+      if (!hi || !lo) return null;
+
+      const price = c[l].close;
+      const range = Math.abs(hi.p - lo.p);
+      if (range < atrVal * 2.5) return null; // require a real impulse leg
+
+      // Bullish OTE: swing low → swing high (up impulse), price retraced down
+      // into the golden pocket. Fib measured from the high (0.0) to the low (1.0).
+      if (lo.i < hi.i) {
+        const H = hi.p;
+        const r = H - lo.p;
+        const zTop = H - 0.618 * r; // shallow edge of the zone
+        const zBot = H - 0.786 * r; // deep edge of the zone
+        const eq = H - 0.705 * r; // equilibrium entry (0.705)
+        const f886 = H - 0.886 * r; // invalidation level
+        if (price <= zTop && price >= zBot) {
+          const entry = eq;
+          const stop = f886 - atrVal * 0.2;
+          const target = H;
+          const rr = (target - entry) / (entry - stop);
+          if (!(rr >= 1.8)) return null;
+          return {
+            id: `${symbol}-ote-${c[l].time}`,
+            symbol,
+            side: "long",
+            entry,
+            stop,
+            target,
+            rr: Number(rr.toFixed(1)),
+            confidence: 77,
+            reason: "Retrace in golden pocket (0.618–0.786) — long richting swing high",
+            time: c[l].time,
+            strategy: "OTE Golden Pocket",
+          };
+        }
+      }
+
+      // Bearish OTE: swing high → swing low (down impulse), price retraced up
+      // into the golden pocket. Fib measured from the low (0.0) to the high (1.0).
+      if (hi.i < lo.i) {
+        const L = lo.p;
+        const r = hi.p - L;
+        const zBot = L + 0.618 * r;
+        const zTop = L + 0.786 * r;
+        const eq = L + 0.705 * r;
+        const f886 = L + 0.886 * r;
+        if (price >= zBot && price <= zTop) {
+          const entry = eq;
+          const stop = f886 + atrVal * 0.2;
+          const target = L;
+          const rr = (entry - target) / (stop - entry);
+          if (!(rr >= 1.8)) return null;
+          return {
+            id: `${symbol}-ote-${c[l].time}`,
+            symbol,
+            side: "short",
+            entry,
+            stop,
+            target,
+            rr: Number(rr.toFixed(1)),
+            confidence: 77,
+            reason: "Retrace in golden pocket (0.618–0.786) — short richting swing low",
+            time: c[l].time,
+            strategy: "OTE Golden Pocket",
+          };
+        }
+      }
+
+      return null;
+    },
+  },
 ];
