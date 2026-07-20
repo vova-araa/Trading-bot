@@ -32,12 +32,13 @@ export function BrokerList() {
           Zo werkt koppelen
         </div>
         <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-          <b className="text-bull">Marktdata</b> is live gekoppeld (Binance + Yahoo/Stooq).{" "}
+          <b className="text-bull">Marktdata</b> is live gekoppeld (Yahoo/Stooq).{" "}
           <b className="text-foreground">TradingView</b> voert automatisch uit via de webhook
           hierboven — jouw gedeployde bots pikken elk alert op.{" "}
-          <b className="text-foreground">cTrader / MetaTrader</b>: sla je API-keys hieronder
-          versleuteld op; directe order-executie naar die accounts vereist nog een trading-backend
-          (cTrader Open API / MetaApi) — de webhook-route is waar die koppeling inplugt.
+          <b className="text-bull">MetaTrader 5</b> voert nu <b>echte orders</b> uit: koppel je
+          MetaApi-token hieronder, en in de chart-order-ticket zet je met <b>⚡ Echt · MT5</b> een
+          live order (read + trade, geen withdraw). cTrader/MT4 slaan de keys versleuteld op; hun
+          executie loopt via de webhook-route.
         </p>
       </div>
       <VaultBar unlocked={unlocked} onUnlockClick={() => setShowUnlock(true)} onLock={lock} />
@@ -164,8 +165,11 @@ function BrokerCard({
     const errs: Record<string, string> = {};
     for (const f of broker.fields) {
       const v = (values[f.key] ?? "").trim();
-      if (!v) errs[f.key] = "Verplicht";
-      else if (f.pattern && !f.pattern.test(v)) errs[f.key] = f.patternHint ?? "Ongeldig formaat";
+      if (!v) {
+        if (!f.optional) errs[f.key] = "Verplicht";
+      } else if (f.pattern && !f.pattern.test(v)) {
+        errs[f.key] = f.patternHint ?? "Ongeldig formaat";
+      }
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -174,6 +178,20 @@ function BrokerCard({
   async function onTest() {
     if (!validate()) return;
     setTesting(true); setFlash(null);
+    // MT5 does a real MetaApi round-trip (account info) — proves the token,
+    // account id and deployment are actually live, not just host reachability.
+    if (broker.id === "mt5") {
+      const { mt5TestConnection } = await import("@/lib/mt5");
+      const r = await mt5TestConnection({
+        token: values.token ?? "",
+        accountId: values.accountId ?? "",
+        region: values.region,
+      });
+      setTesting(false);
+      recordTest(broker.id, r.ok, undefined, r.message);
+      setFlash({ ok: r.ok, msg: r.message });
+      return;
+    }
     const r = await testBroker(broker);
     setTesting(false);
     recordTest(broker.id, r.ok, r.latencyMs, r.message);

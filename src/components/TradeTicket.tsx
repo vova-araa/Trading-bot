@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { currentPrice, formatPrice, onTick, SYMBOLS } from "@/lib/market-data";
 import { openPosition, type Side } from "@/lib/positions";
 import { createBotFromTrade } from "@/lib/bots";
+import { mt5Configured, mt5PlaceOrder } from "@/lib/mt5";
+import { isUnlocked } from "@/lib/broker-vault";
+
+type ExecMode = "paper" | "mt5";
 
 // Order ticket — place a live-tracked paper trade straight from the chart.
 // Buy/Sell, lot size, and stop-loss / take-profit (as % or exact price). The
@@ -20,7 +24,11 @@ export function TradeTicket({
   const [slPct, setSlPct] = useState(0.5);
   const [tpPct, setTpPct] = useState(1.0);
   const [price, setPrice] = useState(() => currentPrice(symbolId));
-  const [flash, setFlash] = useState<string | null>(null);
+  const [flash, setFlash] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [mode, setMode] = useState<ExecMode>("paper");
+  const [mt5Ready, setMt5Ready] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setPrice(currentPrice(symbolId));
@@ -31,6 +39,23 @@ export function TradeTicket({
       off();
     };
   }, [symbolId]);
+
+  // Track whether real MT5 execution is available (creds saved + vault unlocked).
+  useEffect(() => {
+    const sync = () => setMt5Ready(mt5Configured() && isUnlocked());
+    sync();
+    window.addEventListener("ara-brokers-change", sync);
+    window.addEventListener("ara-vault-change", sync);
+    return () => {
+      window.removeEventListener("ara-brokers-change", sync);
+      window.removeEventListener("ara-vault-change", sync);
+    };
+  }, []);
+
+  // Reset the confirm step whenever the order changes underneath it.
+  useEffect(() => {
+    setConfirming(false);
+  }, [side, size, slPct, tpPct, mode, symbolId]);
 
   const dir = side === "long" ? 1 : -1;
   const sl = useMemo(() => price * (1 - (slPct / 100) * dir), [price, slPct, dir]);
@@ -46,20 +71,58 @@ export function TradeTicket({
     onLevels?.({ side, sl, tp });
   }, [side, sl, tp, onLevels]);
 
-  function place() {
+  function placePaper() {
     openPosition({ symbol: symbolId, side, size, sl, tp });
-    setFlash(
-      `${side === "long" ? "▲ Long" : "▼ Short"} ${size.toFixed(2)} ${symbolId} geplaatst @ ${formatPrice(symbolId, price)}`,
-    );
+    setFlash({
+      ok: true,
+      msg: `${side === "long" ? "▲ Long" : "▼ Short"} ${size.toFixed(2)} ${symbolId} geplaatst @ ${formatPrice(symbolId, price)}`,
+    });
     setTimeout(() => setFlash(null), 2600);
     onPlaced?.();
   }
 
+  // Real MT5 order — only after the explicit confirm step (see the button area).
+  async function placeReal() {
+    setBusy(true);
+    setFlash(null);
+    const res = await mt5PlaceOrder({
+      symbol: symbolId,
+      side,
+      volume: size,
+      stopLoss: sl,
+      takeProfit: tp,
+      comment: "ARA",
+    });
+    setBusy(false);
+    setConfirming(false);
+    if (res.ok) {
+      setFlash({
+        ok: true,
+        msg: `⚡ ECHTE ${side === "long" ? "long" : "short"} ${size.toFixed(2)} ${symbolId} order verstuurd naar MT5`,
+      });
+      onPlaced?.();
+    } else {
+      setFlash({ ok: false, msg: `MT5 order geweigerd: ${res.error ?? "onbekende fout"}` });
+    }
+    setTimeout(() => setFlash(null), 6000);
+  }
+
+  function onPrimary() {
+    if (mode === "paper") {
+      placePaper();
+    } else if (!confirming) {
+      setConfirming(true); // arm the "echt geld" confirmation
+    } else {
+      void placeReal();
+    }
+  }
+
   function makeBot() {
     createBotFromTrade({ symbol: symbolId, side, size, slPct, tpPct });
-    setFlash(
-      `🤖 24/7 ${side === "long" ? "long" : "short"} bot op ${symbolId} aangezet — zie de Bots-tab`,
-    );
+    setFlash({
+      ok: true,
+      msg: `🤖 24/7 ${side === "long" ? "long" : "short"} bot op ${symbolId} aangezet — zie de Bots-tab`,
+    });
     setTimeout(() => setFlash(null), 3200);
   }
 
@@ -165,32 +228,112 @@ export function TradeTicket({
           </span>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        {/* Execution mode: paper (simulated) vs real MT5 order */}
+        <div className="grid grid-cols-2 gap-2">
           <button
-            onClick={place}
-            className={`mono col-span-2 rounded-md py-2.5 text-[12px] font-black uppercase tracking-wider text-background ${
-              side === "long" ? "bg-bull hover:brightness-110" : "bg-bear hover:brightness-110"
+            onClick={() => setMode("paper")}
+            className={`mono rounded-md py-1.5 text-[11px] font-black uppercase tracking-wider transition-colors ${
+              mode === "paper"
+                ? "bg-primary/20 text-primary ring-1 ring-primary/50"
+                : "border border-panel-border text-muted-foreground hover:text-foreground"
             }`}
           >
-            {side === "long" ? "▲ Plaats koop-order" : "▼ Plaats verkoop-order"}
+            📝 Paper
           </button>
           <button
-            onClick={makeBot}
-            title="Maak hier een 24/7 bot van met dezelfde instellingen"
-            className="mono rounded-md border border-primary/50 bg-primary/10 py-2.5 text-[11px] font-black uppercase tracking-wider text-primary hover:bg-primary/20"
+            onClick={() => setMode("mt5")}
+            className={`mono rounded-md py-1.5 text-[11px] font-black uppercase tracking-wider transition-colors ${
+              mode === "mt5"
+                ? "bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/50"
+                : "border border-panel-border text-muted-foreground hover:text-foreground"
+            }`}
           >
-            🤖 Bot
+            ⚡ Echt · MT5
           </button>
         </div>
 
+        {mode === "paper" ? (
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={onPrimary}
+              className={`mono col-span-2 rounded-md py-2.5 text-[12px] font-black uppercase tracking-wider text-background ${
+                side === "long" ? "bg-bull hover:brightness-110" : "bg-bear hover:brightness-110"
+              }`}
+            >
+              {side === "long" ? "▲ Plaats koop-order" : "▼ Plaats verkoop-order"}
+            </button>
+            <button
+              onClick={makeBot}
+              title="Maak hier een 24/7 bot van met dezelfde instellingen"
+              className="mono rounded-md border border-primary/50 bg-primary/10 py-2.5 text-[11px] font-black uppercase tracking-wider text-primary hover:bg-primary/20"
+            >
+              🤖 Bot
+            </button>
+          </div>
+        ) : !mt5Ready ? (
+          <div className="mono rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-[10px] leading-snug text-amber-400">
+            MT5 nog niet klaar. Koppel je <b>MetaApi-token</b> in de <b>Brokers</b>-tab en
+            ontgrendel de vault — dan schiet deze knop echte orders je MT5-account in.
+          </div>
+        ) : confirming ? (
+          <div className="grid gap-2">
+            <div className="mono rounded-md border border-bear/60 bg-bear/10 px-2.5 py-2 text-[11px] leading-snug text-bear">
+              ⚠️ <b>Echte order, echt geld.</b> {side === "long" ? "KOOP" : "VERKOOP"}{" "}
+              {size.toFixed(2)} lot {symbolId} @ ~{formatPrice(symbolId, price)} · SL{" "}
+              {formatPrice(symbolId, sl)} · TP {formatPrice(symbolId, tp)}.
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setConfirming(false)}
+                disabled={busy}
+                className="mono rounded-md border border-panel-border py-2.5 text-[11px] font-black uppercase tracking-wider text-muted-foreground disabled:opacity-50"
+              >
+                Annuleer
+              </button>
+              <button
+                onClick={onPrimary}
+                disabled={busy}
+                className="mono rounded-md bg-bear py-2.5 text-[11px] font-black uppercase tracking-wider text-background hover:brightness-110 disabled:opacity-50"
+              >
+                {busy ? "Versturen…" : "✅ Bevestig echte order"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={onPrimary}
+            className={`mono w-full rounded-md py-2.5 text-[12px] font-black uppercase tracking-wider text-background ${
+              side === "long" ? "bg-bull hover:brightness-110" : "bg-bear hover:brightness-110"
+            }`}
+          >
+            ⚡ {side === "long" ? "Koop" : "Verkoop"} echt op MT5
+          </button>
+        )}
+
         {flash && (
-          <div className="mono rounded-md border border-bull/50 bg-bull/10 px-2 py-1.5 text-[11px] text-bull">
-            ✓ {flash}
+          <div
+            className={`mono rounded-md border px-2 py-1.5 text-[11px] ${
+              flash.ok
+                ? "border-bull/50 bg-bull/10 text-bull"
+                : "border-bear/50 bg-bear/10 text-bear"
+            }`}
+          >
+            {flash.ok ? "✓" : "✕"} {flash.msg}
           </div>
         )}
         <p className="mono text-[9px] leading-snug text-muted-foreground">
-          Paper-trade op live koersen — volgt de markt realtime en sluit automatisch op SL/TP. Voor
-          echte uitvoering naar je broker: koppel via de Brokers-tab.
+          {mode === "paper" ? (
+            <>
+              Paper-trade op live koersen — volgt de markt realtime en sluit automatisch op SL/TP.
+              Wissel naar <b>⚡ Echt · MT5</b> om via MetaApi een echte order te sturen.
+            </>
+          ) : (
+            <>
+              Echte order via je gekoppelde MT5-account (MetaApi). Symbool wordt als{" "}
+              <b>{symbolId}</b> doorgestuurd — als je broker een suffix gebruikt (bijv. XAUUSD.r),
+              pas de symboolnaam bij je broker aan. Read + trade, nooit withdraw.
+            </>
+          )}
         </p>
       </div>
     </div>

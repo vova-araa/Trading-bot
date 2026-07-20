@@ -11,6 +11,8 @@ export type BrokerField = {
   /** Optional regex; when set, the value must match to save. */
   pattern?: RegExp;
   patternHint?: string;
+  /** When true the field may be left blank (pattern still applies if filled). */
+  optional?: boolean;
 };
 
 export type Broker = {
@@ -78,14 +80,17 @@ export const BROKERS: Broker[] = [
     name: "MetaTrader 5",
     logo: "Ⓜ",
     kind: "forex",
-    desc: "MT5 met futures, forex, indices en aandelen. Auto-execute via MetaAPI.",
-    keyLocation: "metaapi.cloud → Accounts → Add MT5",
+    desc: "ECHTE order-executie op MT5 — forex, goud, indices & olie — via MetaApi. Read + trade, nooit withdraw.",
+    keyLocation:
+      "app.metaapi.cloud → Accounts (koppel je MT5, kopieer de Account ID) + API tokens (maak een token)",
     pingUrl: "https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai/",
     fields: [
-      { key: "login", label: "Login", pattern: /^[0-9]{4,}$/, patternHint: "Alleen cijfers" },
-      { key: "password", label: "Investor / Trade Password", type: "password" },
-      { key: "server", label: "Broker Server", placeholder: "MetaQuotes-Demo",
-        pattern: /^[A-Za-z0-9._-]{3,}$/, patternHint: "Bijv. MetaQuotes-Demo" },
+      { key: "token", label: "MetaApi API-token", type: "password",
+        pattern: /^.{40,}$/, patternHint: "Plak je volledige MetaApi token (JWT)" },
+      { key: "accountId", label: "MetaApi Account ID",
+        pattern: /^[a-f0-9-]{16,}$/i, patternHint: "De account-UUID uit MetaApi → Accounts" },
+      { key: "region", label: "Region (optioneel)", placeholder: "new-york", optional: true,
+        pattern: /^[a-z0-9-]{3,}$/i, patternHint: "Bijv. new-york, london of singapore" },
     ],
   },
 ];

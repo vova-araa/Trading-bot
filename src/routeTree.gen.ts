@@ -23,6 +23,9 @@ import { Route as ApiEdgeCotRouteImport } from './routes/api/edge/cot'
 import { Route as ApiWebhooksTradingviewRouteImport } from './routes/api/webhooks/tradingview'
 import { Route as ApiPushSubscribeRouteImport } from './routes/api/push/subscribe'
 import { Route as ApiPushTestRouteImport } from './routes/api/push/test'
+import { Route as ApiBrokerMt5OrderRouteImport } from './routes/api/broker/mt5/order'
+import { Route as ApiBrokerMt5PositionsRouteImport } from './routes/api/broker/mt5/positions'
+import { Route as ApiBrokerMt5CloseRouteImport } from './routes/api/broker/mt5/close'
 
 const ProRoute = ProRouteImport.update({
   id: '/pro',
@@ -94,6 +97,21 @@ const ApiPushTestRoute = ApiPushTestRouteImport.update({
   path: '/api/push/test',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiBrokerMt5OrderRoute = ApiBrokerMt5OrderRouteImport.update({
+  id: '/api/broker/mt5/order',
+  path: '/api/broker/mt5/order',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBrokerMt5PositionsRoute = ApiBrokerMt5PositionsRouteImport.update({
+  id: '/api/broker/mt5/positions',
+  path: '/api/broker/mt5/positions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBrokerMt5CloseRoute = ApiBrokerMt5CloseRouteImport.update({
+  id: '/api/broker/mt5/close',
+  path: '/api/broker/mt5/close',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -110,6 +128,9 @@ export interface FileRoutesByFullPath {
   '/api/webhooks/tradingview': typeof ApiWebhooksTradingviewRoute
   '/api/push/subscribe': typeof ApiPushSubscribeRoute
   '/api/push/test': typeof ApiPushTestRoute
+  '/api/broker/mt5/order': typeof ApiBrokerMt5OrderRoute
+  '/api/broker/mt5/positions': typeof ApiBrokerMt5PositionsRoute
+  '/api/broker/mt5/close': typeof ApiBrokerMt5CloseRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -126,6 +147,9 @@ export interface FileRoutesByTo {
   '/api/webhooks/tradingview': typeof ApiWebhooksTradingviewRoute
   '/api/push/subscribe': typeof ApiPushSubscribeRoute
   '/api/push/test': typeof ApiPushTestRoute
+  '/api/broker/mt5/order': typeof ApiBrokerMt5OrderRoute
+  '/api/broker/mt5/positions': typeof ApiBrokerMt5PositionsRoute
+  '/api/broker/mt5/close': typeof ApiBrokerMt5CloseRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -143,6 +167,9 @@ export interface FileRoutesById {
   '/api/webhooks/tradingview': typeof ApiWebhooksTradingviewRoute
   '/api/push/subscribe': typeof ApiPushSubscribeRoute
   '/api/push/test': typeof ApiPushTestRoute
+  '/api/broker/mt5/order': typeof ApiBrokerMt5OrderRoute
+  '/api/broker/mt5/positions': typeof ApiBrokerMt5PositionsRoute
+  '/api/broker/mt5/close': typeof ApiBrokerMt5CloseRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -161,6 +188,9 @@ export interface FileRouteTypes {
     | '/api/webhooks/tradingview'
     | '/api/push/subscribe'
     | '/api/push/test'
+    | '/api/broker/mt5/order'
+    | '/api/broker/mt5/positions'
+    | '/api/broker/mt5/close'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -177,6 +207,9 @@ export interface FileRouteTypes {
     | '/api/webhooks/tradingview'
     | '/api/push/subscribe'
     | '/api/push/test'
+    | '/api/broker/mt5/order'
+    | '/api/broker/mt5/positions'
+    | '/api/broker/mt5/close'
   id:
     | '__root__'
     | '/'
@@ -193,6 +226,9 @@ export interface FileRouteTypes {
     | '/api/webhooks/tradingview'
     | '/api/push/subscribe'
     | '/api/push/test'
+    | '/api/broker/mt5/order'
+    | '/api/broker/mt5/positions'
+    | '/api/broker/mt5/close'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -210,6 +246,9 @@ export interface RootRouteChildren {
   ApiWebhooksTradingviewRoute: typeof ApiWebhooksTradingviewRoute
   ApiPushSubscribeRoute: typeof ApiPushSubscribeRoute
   ApiPushTestRoute: typeof ApiPushTestRoute
+  ApiBrokerMt5OrderRoute: typeof ApiBrokerMt5OrderRoute
+  ApiBrokerMt5PositionsRoute: typeof ApiBrokerMt5PositionsRoute
+  ApiBrokerMt5CloseRoute: typeof ApiBrokerMt5CloseRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -312,6 +351,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPushTestRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/broker/mt5/order': {
+      id: '/api/broker/mt5/order'
+      path: '/api/broker/mt5/order'
+      fullPath: '/api/broker/mt5/order'
+      preLoaderRoute: typeof ApiBrokerMt5OrderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/broker/mt5/positions': {
+      id: '/api/broker/mt5/positions'
+      path: '/api/broker/mt5/positions'
+      fullPath: '/api/broker/mt5/positions'
+      preLoaderRoute: typeof ApiBrokerMt5PositionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/broker/mt5/close': {
+      id: '/api/broker/mt5/close'
+      path: '/api/broker/mt5/close'
+      fullPath: '/api/broker/mt5/close'
+      preLoaderRoute: typeof ApiBrokerMt5CloseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -330,6 +390,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiWebhooksTradingviewRoute: ApiWebhooksTradingviewRoute,
   ApiPushSubscribeRoute: ApiPushSubscribeRoute,
   ApiPushTestRoute: ApiPushTestRoute,
+  ApiBrokerMt5OrderRoute: ApiBrokerMt5OrderRoute,
+  ApiBrokerMt5PositionsRoute: ApiBrokerMt5PositionsRoute,
+  ApiBrokerMt5CloseRoute: ApiBrokerMt5CloseRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
