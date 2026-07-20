@@ -114,12 +114,23 @@ async function fetchBinance(sym: string, secs: number, limit: number): Promise<C
 
 async function fetchYahoo(ticker: string, secs: number, limit: number): Promise<Candle[]> {
   const conf = YAHOO_INTERVAL[secs] ?? YAHOO_INTERVAL[60];
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=${conf.range}&interval=${conf.interval}`;
-  const res = await fetch(url, {
-    headers: { "user-agent": "Mozilla/5.0", accept: "application/json" },
-  });
-  if (!res.ok) throw new Error(`yahoo ${res.status}`);
-  const json = (await res.json()) as YahooChart;
+  const path = `/v8/finance/chart/${encodeURIComponent(ticker)}?range=${conf.range}&interval=${conf.interval}`;
+  // query1 rate-limits from a single host; query2 is a live alternate.
+  let json: YahooChart | null = null;
+  let lastErr: Error | null = null;
+  for (const host of ["query1", "query2"]) {
+    try {
+      const res = await fetch(`https://${host}.finance.yahoo.com${path}`, {
+        headers: { "user-agent": "Mozilla/5.0", accept: "application/json" },
+      });
+      if (!res.ok) throw new Error(`yahoo ${res.status}`);
+      json = (await res.json()) as YahooChart;
+      break;
+    } catch (err) {
+      lastErr = err as Error;
+    }
+  }
+  if (!json) throw lastErr ?? new Error("yahoo failed");
   const result = json?.chart?.result?.[0];
   const ts: number[] = result?.timestamp ?? [];
   const q = result?.indicators?.quote?.[0] ?? {};

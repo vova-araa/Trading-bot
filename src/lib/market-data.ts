@@ -183,8 +183,12 @@ const isLiveFresh = (id: string) => {
   return t != null && Date.now() - t < LIVE_FRESH_MS;
 };
 
-const candleTtl = (secs: number) =>
-  secs <= 15 ? 5000 : secs < 300 ? 20000 : secs < 3600 ? 60000 : 300000;
+const candleTtl = (secs: number, crypto: boolean) => {
+  const base = secs <= 15 ? 5000 : secs < 300 ? 20000 : secs < 3600 ? 60000 : 300000;
+  // Yahoo intraday (non-crypto) only refreshes ~once a minute and is easy to
+  // rate-limit, so refetch far less aggressively than the Binance-backed crypto.
+  return crypto ? base : Math.max(base, 45000);
+};
 
 /** Record a live price for a symbol and fan it out to tick listeners. */
 function pushLivePrice(id: string, price: number, ts = Math.floor(Date.now() / 1000)) {
@@ -254,7 +258,7 @@ function refreshLiveCandles(id: string, tf: Timeframe) {
   if (!isCrypto(id) && secs < 60) return;
   const key = `${id}|${secs}`;
   const hit = candleCache.get(key);
-  if (hit && Date.now() - hit.at < candleTtl(secs)) return;
+  if (hit && Date.now() - hit.at < candleTtl(secs, isCrypto(id))) return;
   if (candleInflight.has(key)) return;
   candleInflight.add(key);
   const limit = 400;
@@ -484,8 +488,18 @@ export function startTickStream() {
   if (liveEnabled) {
     connectBinanceWs();
     void pollQuotes();
-    // Warm the default 1m candle cache so signals/scanner go live fast.
-    SYMBOLS.forEach((s) => refreshLiveCandles(s.id, "1m"));
+    // Warm the default 1m candle cache so signals/scanner go live fast. Crypto
+    // (Binance) can all fire at once; non-crypto (Yahoo) is staggered so we
+    // never burst ~19 requests at a rate-limit-prone host on the same tick.
+    let delay = 0;
+    SYMBOLS.forEach((s) => {
+      if (isCrypto(s.id)) {
+        refreshLiveCandles(s.id, "1m");
+      } else {
+        setTimeout(() => refreshLiveCandles(s.id, "1m"), delay);
+        delay += 250;
+      }
+    });
   }
 }
 
