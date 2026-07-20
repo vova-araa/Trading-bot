@@ -16,6 +16,8 @@ import { LiveStatusBadge } from "@/components/LiveStatusBadge";
 import { TickerTape } from "@/components/TickerTape";
 import { ChartTradeTab } from "@/components/ChartTradeTab";
 import { MarketPulse } from "@/components/MarketPulse";
+import { EdgeTab } from "@/components/EdgeTab";
+import { PredictionMarkets } from "@/components/PredictionMarkets";
 import { startPositionEngine } from "@/lib/positions";
 import {
   buildCandles,
@@ -44,6 +46,7 @@ import { PushDebugPanel } from "@/components/PushDebugPanel";
 const ALLOWED_TABS: Tab[] = [
   "signals",
   "chart",
+  "edge",
   "alerts",
   "news",
   "bots",
@@ -198,6 +201,7 @@ function Home() {
           {([
             { id: "signals", label: "🎯 Signalen" },
             { id: "chart", label: "📈 Chart" },
+            { id: "edge", label: "🐋 Edge" },
             { id: "alerts", label: "🔔 Alarmen" },
             { id: "news", label: "📰 Nieuws" },
             { id: "bots", label: "🤖 Mijn Bots" },
@@ -278,6 +282,19 @@ function Home() {
           </>
         )}
 
+        {tab === "edge" && (
+          <>
+            <div className="mb-3">
+              <h2 className="text-lg font-black tracking-tight">🐋 Smart Money Edge</h2>
+              <p className="text-[12px] text-muted-foreground">
+                Zie live wanneer walvissen en instituten in- of uitstappen, wie er geliquideerd
+                wordt, en wat de markt verwacht <em>vóór</em> het nieuws uitkomt.
+              </p>
+            </div>
+            <EdgeTab />
+          </>
+        )}
+
         {tab === "alerts" && (
           <>
             <div className="mb-3">
@@ -296,11 +313,12 @@ function Home() {
               </p>
             </div>
             <MarketPulse />
+            <div className="mb-3">
+              <PredictionMarkets />
+            </div>
             <NewsCenter />
           </>
         )}
-
-
 
         {tab === "bots" && (
           <>

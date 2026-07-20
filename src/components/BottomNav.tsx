@@ -1,13 +1,22 @@
 type Tab =
-  "signals" | "chart" | "alerts" | "news" | "bots" | "market" | "brokers" | "copy" | "pump";
+  | "signals"
+  | "chart"
+  | "edge"
+  | "alerts"
+  | "news"
+  | "bots"
+  | "market"
+  | "brokers"
+  | "copy"
+  | "pump";
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "signals", label: "Signalen", icon: "🎯" },
   { id: "chart", label: "Chart", icon: "📈" },
+  { id: "edge", label: "Edge", icon: "🐋" },
   { id: "alerts", label: "Alarmen", icon: "🔔" },
   { id: "bots", label: "Bots", icon: "🤖" },
   { id: "news", label: "Nieuws", icon: "📰" },
-  { id: "market", label: "Store", icon: "🛒" },
 ];
 
 export function BottomNav({ tab, onChange }: { tab: string; onChange: (t: Tab) => void }) {
