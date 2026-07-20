@@ -5,12 +5,13 @@
 // alert feed (bot_alerts), and — when the payload names an action + symbol —
 // record it on your matching deployed bots so they act on the signal.
 //
-// NOTE: this drives ARA's in-app (paper) bots and signal feed. Forwarding an
-// order to a real broker account additionally requires a broker execution
-// adapter (cTrader Open API / MetaApi / exchange REST) with your credentials —
-// see the Brokers tab. This receiver is where that routing plugs in.
+// NOTE: this drives ARA's in-app (paper) bots and signal feed. It ALSO forwards
+// to a real MT5 account via MetaApi when you opt in with `&exec=1` on the URL
+// AND the server has METAAPI_TOKEN + METAAPI_ACCOUNT_ID set — see the Brokers
+// tab / MetaApi. Without those, it stays paper + alerts only.
 
 import { createFileRoute } from "@tanstack/react-router";
+import { resolveCreds, placeOrder, closePosition, getPositions } from "@/lib/metaapi.server";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -23,7 +24,16 @@ type Signal = {
   symbol: string | null;
   price: number | null;
   note: string | null;
+  volume: number | null; // lots (for real execution)
+  sl: number | null; // absolute stop-loss price
+  tp: number | null; // absolute take-profit price
+  brokerSymbol: string | null; // optional MT5 symbol override
 };
+
+function num(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 
 function normalizeAction(raw: unknown): Signal["action"] {
   const s = String(raw ?? "").toLowerCase();
@@ -45,6 +55,10 @@ function parseSignal(body: string): Signal {
         symbol: j.symbol || j.ticker || j.sym ? String(j.symbol ?? j.ticker ?? j.sym) : null,
         price: Number.isFinite(price) && price > 0 ? price : null,
         note: j.note || j.comment || j.message ? String(j.note ?? j.comment ?? j.message) : null,
+        volume: num(j.volume ?? j.qty ?? j.lot ?? j.size ?? j.contracts),
+        sl: num(j.sl ?? j.stopLoss ?? j.stop),
+        tp: num(j.tp ?? j.takeProfit ?? j.target),
+        brokerSymbol: j.mt5symbol || j.brokerSymbol ? String(j.mt5symbol ?? j.brokerSymbol) : null,
       };
     } catch {
       /* fall through to text handling */
@@ -63,7 +77,49 @@ function parseSignal(body: string): Signal {
     symbol: symMatch ? symMatch[1] : null,
     price: priceMatch ? Number(priceMatch[1]) : null,
     note: trimmed.slice(0, 240) || null,
+    volume: null,
+    sl: null,
+    tp: null,
+    brokerSymbol: null,
   };
+}
+
+/** Route a signal to the real MT5 account via MetaApi (env creds). */
+async function executeMt5(sig: Signal): Promise<{ executed: boolean; detail: string }> {
+  const creds = resolveCreds({}); // server env only — no per-user token here
+  if (!creds) return { executed: false, detail: "geen server MetaApi-creds (METAAPI_TOKEN)" };
+  const symbol = sig.brokerSymbol || sig.symbol;
+  if (!symbol) return { executed: false, detail: "geen symbool" };
+
+  if (sig.action === "close") {
+    const pos = await getPositions(creds);
+    if (!pos.ok) return { executed: false, detail: pos.error ?? "posities ophalen mislukt" };
+    const rows = (pos.data ?? []) as { id: string; symbol?: string }[];
+    const mine = rows.filter((p) => (p.symbol ?? "").toUpperCase() === symbol.toUpperCase());
+    if (!mine.length) return { executed: false, detail: `geen open positie op ${symbol}` };
+    let closed = 0;
+    for (const p of mine) {
+      const r = await closePosition(creds, p.id);
+      if (r.ok) closed++;
+    }
+    return {
+      executed: closed > 0,
+      detail: `${closed}/${mine.length} positie(s) gesloten op ${symbol}`,
+    };
+  }
+
+  // buy / sell → market order
+  const volume = sig.volume ?? num(process.env.METAAPI_DEFAULT_LOT) ?? 0.1;
+  const r = await placeOrder(creds, {
+    symbol,
+    side: sig.action === "buy" ? "long" : "short",
+    volume,
+    stopLoss: sig.sl ?? undefined,
+    takeProfit: sig.tp ?? undefined,
+    comment: "ARA TV",
+  });
+  if (!r.ok) return { executed: false, detail: r.error ?? "order geweigerd" };
+  return { executed: true, detail: `${sig.action} ${volume} ${symbol} verstuurd naar MT5` };
 }
 
 function describe(sig: Signal): string {
@@ -93,18 +149,30 @@ export const Route = createFileRoute("/api/webhooks/tradingview")({
           ok: true,
           live: true,
           tokenPresent: !!t,
-          hint: 'POST your TradingView alert here. Body: {"action":"buy","symbol":"XAUUSD","price":"{{close}}"}',
+          hint: 'POST your TradingView alert here. Body: {"action":"buy","symbol":"XAUUSD","volume":0.1}. Add &exec=1 to route it as a real MT5 order (needs server MetaApi creds).',
         });
       },
 
       POST: async ({ request }) => {
-        const token = new URL(request.url).searchParams.get("t");
+        const url = new URL(request.url);
+        const token = url.searchParams.get("t");
         if (!token) return json({ ok: false, error: "missing token (?t=…)" }, 400);
+        const wantExec = url.searchParams.get("exec") === "1";
 
         const raw = await request.text();
         if (!raw.trim()) return json({ ok: false, error: "empty body" }, 400);
         const sig = parseSignal(raw);
         const message = `TradingView: ${describe(sig)}`;
+
+        // Real MT5 execution (opt-in via &exec=1 + server MetaApi creds).
+        let execution: { executed: boolean; detail: string } | null = null;
+        if (wantExec && sig.action !== "alert") {
+          try {
+            execution = await executeMt5(sig);
+          } catch (err) {
+            execution = { executed: false, detail: (err as Error).message };
+          }
+        }
 
         let stored = false;
         let botsTouched = 0;
@@ -118,6 +186,15 @@ export const Route = createFileRoute("/api/webhooks/tradingview")({
             message,
           });
           if (!aErr) stored = true;
+
+          // Log the real-execution outcome as its own alert so it shows in-app.
+          if (execution) {
+            await supabaseAdmin.from("bot_alerts").insert({
+              owner_key: token,
+              level: execution.executed ? "info" : "error",
+              message: `⚡ MT5: ${execution.detail}`,
+            });
+          }
 
           // If the alert names a tradable action + symbol, stamp it on the
           // owner's deployed bots for that symbol so they act on the signal.
@@ -142,7 +219,7 @@ export const Route = createFileRoute("/api/webhooks/tradingview")({
           return json({ ok: false, error: "storage unavailable", signal: sig }, 502);
         }
 
-        return json({ ok: true, stored, botsTouched, signal: sig });
+        return json({ ok: true, stored, botsTouched, signal: sig, execution });
       },
     },
   },

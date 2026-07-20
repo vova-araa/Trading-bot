@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { findTemplate } from "@/lib/bot-marketplace";
-import { applyBotConfig, removeBot, updateBotBroker, type Bot, type BotSettings } from "@/lib/bots";
+import {
+  applyBotConfig,
+  removeBot,
+  setBotLive,
+  updateBotBroker,
+  type Bot,
+  type BotSettings,
+} from "@/lib/bots";
+import { mt5Configured } from "@/lib/mt5";
 import { SYMBOLS } from "@/lib/market-data";
 import { subscribeVersions, type BotVersion } from "@/lib/bot-versions";
 import {
@@ -18,6 +26,7 @@ export function BotEditor({ bot, onClose }: { bot: Bot; onClose: () => void }) {
   const [settings, setSettings] = useState<BotSettings>(bot.settings || {});
   const [symbol, setSymbol] = useState(bot.symbol);
   const [broker, setBroker] = useState<BrokerBinding | undefined>(bot.broker);
+  const [live, setLive] = useState<boolean>(!!bot.live);
   const [view, setView] = useState<View>("edit");
   const [versions, setVersions] = useState<BotVersion[]>([]);
   const [shareOpen, setShareOpen] = useState(false);
@@ -40,6 +49,7 @@ export function BotEditor({ bot, onClose }: { bot: Bot; onClose: () => void }) {
     }
     applyBotConfig(bot.id, symbol, settings, "manual");
     updateBotBroker(bot.id, broker);
+    if (live !== !!bot.live) setBotLive(bot.id, live);
     onClose();
   };
 
@@ -112,6 +122,8 @@ export function BotEditor({ bot, onClose }: { bot: Bot; onClose: () => void }) {
                 onChange={setBroker}
                 issues={issuesFor("broker", issues)}
               />
+
+              <LiveExecToggle live={live} onChange={setLive} />
 
               <Field label="Asset / Symbool" help="Op welke koers deze bot draait" issues={issuesFor("symbol", issues)}>
                 <select
@@ -230,6 +242,50 @@ export function BotEditor({ bot, onClose }: { bot: Bot; onClose: () => void }) {
     </div>
     {shareOpen && <BotShareDialog bot={bot} onClose={() => setShareOpen(false)} />}
     </>
+  );
+}
+
+function LiveExecToggle({ live, onChange }: { live: boolean; onChange: (v: boolean) => void }) {
+  const configured = typeof window !== "undefined" && mt5Configured();
+  return (
+    <div
+      className={`mb-4 rounded-lg border p-3 ${
+        live ? "border-amber-500/60 bg-amber-500/10" : "border-panel-border/70 bg-panel-border/20"
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="mono text-[10px] font-black uppercase tracking-wider text-amber-400">
+            ⚡ Live MT5-executie
+          </div>
+          <div className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+            Zet echte MT5-orders bij een <b>bevestigd</b> flow-signaal (volume-spike, uitbraak of
+            volatiliteit) in de richting van de bot. Papier-P&amp;L blijft ook lopen.
+          </div>
+        </div>
+        <button
+          onClick={() => onChange(!live)}
+          aria-pressed={live}
+          className={`mono relative h-6 w-11 shrink-0 rounded-full transition-colors ${live ? "bg-amber-500" : "bg-muted"}`}
+        >
+          <span
+            className={`absolute top-0.5 h-5 w-5 rounded-full bg-background shadow transition-all ${live ? "left-[22px]" : "left-0.5"}`}
+          />
+        </button>
+      </div>
+      {live && !configured && (
+        <div className="mono mt-2 rounded-md border border-bear/40 bg-bear/10 px-2 py-1.5 text-[10px] text-bear">
+          MT5 is nog niet gekoppeld — koppel je MetaApi-token in de <b>Brokers</b>-tab en ontgrendel
+          de vault, anders worden er geen echte orders verstuurd.
+        </div>
+      )}
+      {live && configured && (
+        <div className="mono mt-2 text-[10px] text-amber-400/90">
+          ⚠️ Deze bot handelt met <b>echt geld</b>. Max. 1 order per 5 min, in de richting van de
+          bias. Zet de bot op <b>deploy</b> zodat hij live meedraait.
+        </div>
+      )}
+    </div>
   );
 }
 

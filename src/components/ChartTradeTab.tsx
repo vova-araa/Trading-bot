@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { TradingChart, type IndicatorFlags, type ChartPriceLine } from "@/components/TradingChart";
 import { TradeTicket } from "@/components/TradeTicket";
 import { PositionsPanel } from "@/components/PositionsPanel";
+import { Mt5PositionsPanel } from "@/components/Mt5PositionsPanel";
 import { LiveStatusBadge } from "@/components/LiveStatusBadge";
 import { subscribePositions, type Position, type Side } from "@/lib/positions";
 import {
@@ -300,6 +301,7 @@ export function ChartTradeTab() {
 
       {/* Order ticket + positions */}
       <TradeTicket symbolId={symbol} onLevels={setDraft} />
+      <Mt5PositionsPanel />
       <PositionsPanel />
     </div>
   );

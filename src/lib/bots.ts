@@ -45,6 +45,7 @@ export type Bot = {
   lastAction?: BotAction;    // most recent activity
   alerts?: BotAlert[];       // recent warnings/errors (max 8, newest first)
   broker?: BrokerBinding;    // gekoppelde broker + broker-symbool + hefboom
+  live?: boolean;            // execute real MT5 orders on confirmed signals
 };
 
 const KEY = "ara-bots-v1";
@@ -277,6 +278,27 @@ export function updateBotBroker(id: string, broker: BrokerBinding | undefined) {
   emit();
 }
 
+/** Toggle real-money MT5 execution for a bot (fires on confirmed flow signals). */
+export function setBotLive(id: string, live: boolean) {
+  const now = Date.now();
+  bots = bots.map((b) => {
+    if (b.id !== id) return b;
+    return {
+      ...b,
+      live,
+      alerts: pushAlert(
+        b,
+        live ? "warn" : "info",
+        live
+          ? "⚡ Live MT5-executie AAN — bot stuurt echte orders op bevestigde signalen"
+          : "Live MT5-executie uit — terug naar papier",
+      ),
+      lastAction: { at: now, kind: "config", text: live ? "Live MT5 aangezet" : "Live MT5 uit" },
+    };
+  });
+  emit();
+}
+
 export function updateBotSettings(id: string, settings: BotSettings) {
   bots = bots.map((b) => (b.id === id ? { ...b, settings: { ...b.settings, ...settings } } : b));
   const b = bots.find((x) => x.id === id);
@@ -322,6 +344,21 @@ export function removeBot(id: string) {
   emit();
 }
 
+
+/** Record a real MT5 order (or its rejection) on a bot's timeline. */
+export function logBotLive(id: string, level: BotAlert["level"], text: string, counts = false) {
+  const now = Date.now();
+  bots = bots.map((b) => {
+    if (b.id !== id) return b;
+    return {
+      ...b,
+      trades: counts ? b.trades + 1 : b.trades,
+      lastAction: { at: now, kind: "open", text },
+      alerts: pushAlert(b, level, text),
+    };
+  });
+  emit();
+}
 
 export function dismissAlert(id: string, at: number) {
   bots = bots.map((b) => (b.id === id ? { ...b, alerts: (b.alerts ?? []).filter((a) => a.at !== at) } : b));

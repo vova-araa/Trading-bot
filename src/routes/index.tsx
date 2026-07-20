@@ -20,6 +20,7 @@ import { EdgeTab } from "@/components/EdgeTab";
 import { PredictionMarkets } from "@/components/PredictionMarkets";
 import { startPositionEngine } from "@/lib/positions";
 import { startFlowRadar } from "@/lib/flow-radar";
+import { startBotLiveExec } from "@/lib/bot-live-exec";
 import {
   buildCandles,
   currentPrice,
@@ -104,6 +105,7 @@ function Home() {
     startAlertEngine();
     startNewsNotifier();
     startFlowRadar();
+    startBotLiveExec();
     void registerAraServiceWorker();
   }, []);
   useEffect(() => {
