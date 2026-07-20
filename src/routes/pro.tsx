@@ -11,10 +11,12 @@ import {
   TIMEFRAMES,
   currentPrice,
   formatPrice,
+  dayChangePct,
   onTick,
   startTickStream,
   type Timeframe,
 } from "@/lib/market-data";
+import { LiveStatusBadge } from "@/components/LiveStatusBadge";
 import { STRATEGIES } from "@/lib/strategies";
 
 export const Route = createFileRoute("/pro")({
@@ -80,8 +82,8 @@ function Dashboard() {
   }, [symbol]);
 
   const sym = useMemo(() => SYMBOLS.find((s) => s.id === symbol)!, [symbol]);
-  const change = price - sym.price;
-  const changePct = (change / sym.price) * 100;
+  const changePct = dayChangePct(symbol);
+  const change = (changePct / 100) * price;
   const up = price >= prevPrice;
 
   return (
@@ -96,9 +98,8 @@ function Dashboard() {
           <span className="hidden text-[10px] uppercase tracking-widest text-muted-foreground sm:inline">Realtime · Multi-asset</span>
         </div>
         <div className="flex items-center gap-3 text-[11px]">
-          <span className="hidden items-center gap-1.5 text-muted-foreground md:flex">
-            <span className="live-dot inline-block h-1.5 w-1.5 rounded-full bg-bull" />
-            LIVE FEED
+          <span className="hidden md:flex">
+            <LiveStatusBadge compact />
           </span>
           <span className="text-muted-foreground">UTC</span>
           <span className="tabular-nums font-semibold">{clock.toISOString().slice(11, 19)}</span>
@@ -175,7 +176,7 @@ function Dashboard() {
       </div>
 
       <footer className="mono flex h-6 shrink-0 items-center justify-between border-t border-panel-border/70 bg-panel/70 px-3 text-[10px] text-muted-foreground">
-        <span>demo feed · deterministic simulator seeded at 00:00 UTC · connect real broker feed to go live</span>
+        <span>live feed · Binance (crypto) + Yahoo/Stooq (fx, metals, indices) · simulator fallback offline</span>
         <span>© ARA TRADES Pro</span>
       </footer>
     </div>

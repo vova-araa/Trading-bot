@@ -14,6 +14,8 @@ import { BotStatusPanel } from "@/components/BotStatusPanel";
 import { NotificationToggle } from "@/components/NotificationToggle";
 import { LiveStatusBadge } from "@/components/LiveStatusBadge";
 import { TickerTape } from "@/components/TickerTape";
+import { ChartTradeTab } from "@/components/ChartTradeTab";
+import { startPositionEngine } from "@/lib/positions";
 import {
   buildCandles,
   currentPrice,
@@ -38,7 +40,17 @@ import { NewsCenter } from "@/components/NewsCenter";
 import { ShortcutQuickMenu } from "@/components/ShortcutQuickMenu";
 import { PushDebugPanel } from "@/components/PushDebugPanel";
 
-const ALLOWED_TABS: Tab[] = ["signals", "alerts", "news", "bots", "market", "brokers", "copy", "pump"];
+const ALLOWED_TABS: Tab[] = [
+  "signals",
+  "chart",
+  "alerts",
+  "news",
+  "bots",
+  "market",
+  "brokers",
+  "copy",
+  "pump",
+];
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -80,7 +92,14 @@ function Home() {
     }
   }, [search.bot]);
 
-  useEffect(() => { startTickStream(); startBotEngine(); startAlertEngine(); startNewsNotifier(); void registerAraServiceWorker(); }, []);
+  useEffect(() => {
+    startTickStream();
+    startBotEngine();
+    startPositionEngine();
+    startAlertEngine();
+    startNewsNotifier();
+    void registerAraServiceWorker();
+  }, []);
   useEffect(() => {
     const unsync = bindBotSync(mergeBotPatch, addRemoteBot, removeBotLocal);
     const unmirror = startDeployedMirror();
@@ -177,6 +196,7 @@ function Home() {
         <div className="mx-auto hidden max-w-5xl gap-1 overflow-x-auto px-3 pb-2 sm:flex">
           {([
             { id: "signals", label: "🎯 Signalen" },
+            { id: "chart", label: "📈 Chart" },
             { id: "alerts", label: "🔔 Alarmen" },
             { id: "news", label: "📰 Nieuws" },
             { id: "bots", label: "🤖 Mijn Bots" },
@@ -242,6 +262,18 @@ function Home() {
                 ))}
               </div>
             )}
+          </>
+        )}
+
+        {tab === "chart" && (
+          <>
+            <div className="mb-3">
+              <h2 className="text-lg font-black tracking-tight">📈 Chart & Trade</h2>
+              <p className="text-[12px] text-muted-foreground">
+                Live candles van 1 seconde tot 1 dag, met volume. Plaats direct een trade of zet er een bot op.
+              </p>
+            </div>
+            <ChartTradeTab />
           </>
         )}
 
