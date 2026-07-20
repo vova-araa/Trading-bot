@@ -1,11 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { currentPrice, formatPrice, onTick, SYMBOLS } from "@/lib/market-data";
 import { openPosition, type Side } from "@/lib/positions";
+import { createBotFromTrade } from "@/lib/bots";
 
 // Order ticket — place a live-tracked paper trade straight from the chart.
 // Buy/Sell, lot size, and stop-loss / take-profit (as % or exact price). The
 // position then marks to market on every tick and auto-closes on SL/TP.
-export function TradeTicket({ symbolId, onPlaced }: { symbolId: string; onPlaced?: () => void }) {
+export function TradeTicket({
+  symbolId,
+  onPlaced,
+  onLevels,
+}: {
+  symbolId: string;
+  onPlaced?: () => void;
+  onLevels?: (l: { side: Side; sl: number; tp: number }) => void;
+}) {
   const [side, setSide] = useState<Side>("long");
   const [size, setSize] = useState(0.5);
   const [slPct, setSlPct] = useState(0.5);
@@ -32,6 +41,11 @@ export function TradeTicket({ symbolId, onPlaced }: { symbolId: string; onPlaced
   const rr = slPct > 0 ? tpPct / slPct : 0;
   const sym = SYMBOLS.find((s) => s.id === symbolId);
 
+  // Report the draft SL/TP up so the chart can draw them live.
+  useEffect(() => {
+    onLevels?.({ side, sl, tp });
+  }, [side, sl, tp, onLevels]);
+
   function place() {
     openPosition({ symbol: symbolId, side, size, sl, tp });
     setFlash(
@@ -39,6 +53,14 @@ export function TradeTicket({ symbolId, onPlaced }: { symbolId: string; onPlaced
     );
     setTimeout(() => setFlash(null), 2600);
     onPlaced?.();
+  }
+
+  function makeBot() {
+    createBotFromTrade({ symbol: symbolId, side, size, slPct, tpPct });
+    setFlash(
+      `🤖 24/7 ${side === "long" ? "long" : "short"} bot op ${symbolId} aangezet — zie de Bots-tab`,
+    );
+    setTimeout(() => setFlash(null), 3200);
   }
 
   return (
@@ -143,14 +165,23 @@ export function TradeTicket({ symbolId, onPlaced }: { symbolId: string; onPlaced
           </span>
         </div>
 
-        <button
-          onClick={place}
-          className={`mono rounded-md py-2.5 text-[12px] font-black uppercase tracking-wider text-background ${
-            side === "long" ? "bg-bull hover:brightness-110" : "bg-bear hover:brightness-110"
-          }`}
-        >
-          {side === "long" ? "▲ Plaats koop-order" : "▼ Plaats verkoop-order"}
-        </button>
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            onClick={place}
+            className={`mono col-span-2 rounded-md py-2.5 text-[12px] font-black uppercase tracking-wider text-background ${
+              side === "long" ? "bg-bull hover:brightness-110" : "bg-bear hover:brightness-110"
+            }`}
+          >
+            {side === "long" ? "▲ Plaats koop-order" : "▼ Plaats verkoop-order"}
+          </button>
+          <button
+            onClick={makeBot}
+            title="Maak hier een 24/7 bot van met dezelfde instellingen"
+            className="mono rounded-md border border-primary/50 bg-primary/10 py-2.5 text-[11px] font-black uppercase tracking-wider text-primary hover:bg-primary/20"
+          >
+            🤖 Bot
+          </button>
+        </div>
 
         {flash && (
           <div className="mono rounded-md border border-bull/50 bg-bull/10 px-2 py-1.5 text-[11px] text-bull">

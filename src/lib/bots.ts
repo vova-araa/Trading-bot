@@ -87,18 +87,19 @@ const subs = new Set<(b: Bot[]) => void>();
 // returns that move each bot's P&L.
 const prevPrice = new Map<string, number>();
 
-/** P&L delta for one bot from a real per-tick return `ret` on `notional`. */
-function botDelta(kind: BotKind, ret: number, notional: number): number {
+/** P&L delta for one bot from a real per-tick return `ret` on `notional`.
+ *  `bias` is +1 for long, -1 for short (applies to directional strategies). */
+function botDelta(kind: BotKind, ret: number, notional: number, bias = 1): number {
   switch (kind) {
-    // Directional, long-biased strategies: mark-to-market with the real move.
+    // Directional strategies: mark-to-market with the real move, in bias dir.
     case "trend":
     case "signal":
     case "smc":
     case "dca":
-      return notional * ret;
-    // Momentum chaser: rides the move, slightly amplified.
+      return notional * ret * bias;
+    // Momentum chaser: rides the move (in bias dir), slightly amplified.
     case "pump":
-      return notional * ret * 1.4;
+      return notional * ret * 1.4 * bias;
     // Range/scalping strategies harvest real volatility regardless of direction.
     case "grid":
     case "scalper":
@@ -107,7 +108,7 @@ function botDelta(kind: BotKind, ret: number, notional: number): number {
     case "arbitrage":
       return notional * 0.000004;
     default:
-      return notional * ret;
+      return notional * ret * bias;
   }
 }
 
@@ -218,6 +219,56 @@ export function installFromTemplate(templateId: string, symbol?: string, brokerI
   bots = [bot, ...bots];
   const brokerNote = broker ? ` · gekoppeld aan ${broker.brokerId} (${broker.brokerSymbol}, ${broker.leverage}x)` : "";
   pushVersion(id, { symbol: sym, settings: bot.settings ?? {} }, "install", `Geïnstalleerd vanaf ${tpl.name}${brokerNote}`);
+  emit();
+  return bot;
+}
+
+/** Create + deploy a 24/7 bot straight from a trade ticket (chart order). */
+export function createBotFromTrade(input: {
+  symbol: string;
+  side: "long" | "short";
+  size: number;
+  slPct?: number;
+  tpPct?: number;
+}): Bot {
+  const now = Date.now();
+  const id = `manual-${now.toString(36)}`;
+  const long = input.side === "long";
+  const bot: Bot = {
+    id,
+    kind: "signal",
+    name: long ? "Long Bot" : "Short Bot",
+    symbol: input.symbol,
+    emoji: long ? "🟢" : "🔴",
+    desc: `${long ? "Long" : "Short"} ${input.symbol} · ${input.size.toFixed(2)} lot · gemaakt vanaf de chart.`,
+    enabled: true,
+    deployed: true,
+    pnl: 0,
+    trades: 0,
+    winRate: 0.55 + Math.random() * 0.25,
+    start: currentPrice(input.symbol) || 0,
+    platform: "ARA",
+    settings: {
+      lot: input.size,
+      bias: input.side,
+      ...(input.slPct != null ? { slPct: input.slPct } : {}),
+      ...(input.tpPct != null ? { tpPct: input.tpPct } : {}),
+    },
+    startedAt: now,
+    lastAction: {
+      at: now,
+      kind: "deploy",
+      text: `${long ? "▲ long" : "▼ short"} ${input.symbol} 24/7 live`,
+    },
+    alerts: [{ at: now, level: "info", text: "Bot gemaakt vanaf chart-order · draait 24/7" }],
+  };
+  bots = [bot, ...bots];
+  pushVersion(
+    id,
+    { symbol: input.symbol, settings: bot.settings ?? {} },
+    "install",
+    "Gemaakt vanaf chart-order",
+  );
   emit();
   return bot;
 }
@@ -342,7 +393,8 @@ export function startBotEngine() {
       const lev = Number(b.broker?.leverage ?? b.settings?.leverage ?? 1) || 1;
       const lot = Number(b.settings?.lot ?? 1) || 1;
       const notional = 1000 * lot * lev;
-      const delta = botDelta(b.kind, ret, notional);
+      const bias = b.settings?.bias === "short" ? -1 : 1;
+      const delta = botDelta(b.kind, ret, notional, bias);
 
       const pnl = b.pnl + delta;
       // count a trade when a meaningful move is captured

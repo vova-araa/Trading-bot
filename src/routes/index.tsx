@@ -15,6 +15,7 @@ import { NotificationToggle } from "@/components/NotificationToggle";
 import { LiveStatusBadge } from "@/components/LiveStatusBadge";
 import { TickerTape } from "@/components/TickerTape";
 import { ChartTradeTab } from "@/components/ChartTradeTab";
+import { MarketPulse } from "@/components/MarketPulse";
 import { startPositionEngine } from "@/lib/positions";
 import {
   buildCandles,
@@ -294,6 +295,7 @@ function Home() {
                 Alle economische events op één plek. <span className="mono font-bold text-primary">🔮 Nowcast</span> laat zien wat GDPNow, Cleveland Fed, Truflation, Kalshi en Bloomberg verwachten — <em>voordat</em> het cijfer uitkomt.
               </p>
             </div>
+            <MarketPulse />
             <NewsCenter />
           </>
         )}

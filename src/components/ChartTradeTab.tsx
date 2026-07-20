@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { TradingChart, type IndicatorFlags } from "@/components/TradingChart";
+import { TradingChart, type IndicatorFlags, type ChartPriceLine } from "@/components/TradingChart";
 import { TradeTicket } from "@/components/TradeTicket";
 import { PositionsPanel } from "@/components/PositionsPanel";
 import { LiveStatusBadge } from "@/components/LiveStatusBadge";
+import { subscribePositions, type Position, type Side } from "@/lib/positions";
 import {
   SYMBOLS,
   TIMEFRAMES,
@@ -60,6 +61,31 @@ export function ChartTradeTab() {
   );
   const [kind, setKind] = useState<KindFilter>("all");
   const [price, setPrice] = useState(() => currentPrice(symbol));
+  const [draft, setDraft] = useState<{ side: Side; sl: number; tp: number } | null>(null);
+  const [positions, setPositions] = useState<Position[]>([]);
+
+  useEffect(() => subscribePositions(setPositions), []);
+
+  // Entry / SL / TP lines drawn on the chart: draft levels from the ticket plus
+  // every open position on this symbol.
+  const priceLines = useMemo<ChartPriceLine[]>(() => {
+    const lines: ChartPriceLine[] = [];
+    if (draft) {
+      lines.push({ price: draft.sl, color: "#ef5a5a", title: "SL", dashed: true });
+      lines.push({ price: draft.tp, color: "#22d18c", title: "TP", dashed: true });
+    }
+    for (const p of positions) {
+      if (p.status !== "open" || p.symbol !== symbol) continue;
+      lines.push({
+        price: p.entry,
+        color: p.side === "long" ? "#5cc8ff" : "#f5c26b",
+        title: p.side === "long" ? "▲ entry" : "▼ entry",
+      });
+      if (p.sl != null) lines.push({ price: p.sl, color: "#ef5a5a", title: "pos SL" });
+      if (p.tp != null) lines.push({ price: p.tp, color: "#22d18c", title: "pos TP" });
+    }
+    return lines;
+  }, [draft, positions, symbol]);
 
   useEffect(() => saveLS(LS_SYM, symbol), [symbol]);
   useEffect(() => saveLS(LS_TF, tf), [tf]);
@@ -217,11 +243,16 @@ export function ChartTradeTab() {
 
       {/* Chart */}
       <div className="panel h-[46vh] min-h-[320px] overflow-hidden">
-        <TradingChart symbolId={symbol} timeframe={tf} indicators={indicators} />
+        <TradingChart
+          symbolId={symbol}
+          timeframe={tf}
+          indicators={indicators}
+          priceLines={priceLines}
+        />
       </div>
 
       {/* Order ticket + positions */}
-      <TradeTicket symbolId={symbol} />
+      <TradeTicket symbolId={symbol} onLevels={setDraft} />
       <PositionsPanel />
     </div>
   );

@@ -8,6 +8,7 @@ import {
   type IChartApi,
   type ISeriesApi,
   type ISeriesMarkersPluginApi,
+  type IPriceLine,
   type SeriesMarker,
   type UTCTimestamp,
   type MouseEventParams,
@@ -30,14 +31,18 @@ export type IndicatorFlags = {
   volume: boolean;
 };
 
+export type ChartPriceLine = { price: number; color: string; title: string; dashed?: boolean };
+
 export function TradingChart({
   symbolId,
   timeframe,
   indicators,
+  priceLines,
 }: {
   symbolId: string;
   timeframe: Timeframe;
   indicators: IndicatorFlags;
+  priceLines?: ChartPriceLine[];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -48,6 +53,7 @@ export function TradingChart({
   const dataRef = useRef<Candle[]>([]);
   const vpOverlayRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<ISeriesMarkersPluginApi<UTCTimestamp> | null>(null);
+  const priceLinesRef = useRef<IPriceLine[]>([]);
   const eventsByTimeRef = useRef<Map<number, NewsItem>>(new Map());
   const [showNews, setShowNews] = useState(true);
   const [hoverEvent, setHoverEvent] = useState<{ n: NewsItem; x: number; y: number } | null>(null);
@@ -174,6 +180,27 @@ export function TradingChart({
   useEffect(() => {
     refreshOverlays();
   }, [indicators]);
+
+  // Draw entry / SL / TP price lines from the order ticket + open positions.
+  useEffect(() => {
+    const series = candleRef.current;
+    if (!series) return;
+    priceLinesRef.current.forEach((l) => series.removePriceLine(l));
+    priceLinesRef.current = [];
+    for (const pl of priceLines ?? []) {
+      if (!Number.isFinite(pl.price) || pl.price <= 0) continue;
+      priceLinesRef.current.push(
+        series.createPriceLine({
+          price: pl.price,
+          color: pl.color,
+          lineWidth: 1,
+          lineStyle: pl.dashed ? 2 : 0,
+          axisLabelVisible: true,
+          title: pl.title,
+        }),
+      );
+    }
+  }, [priceLines, symbolId, timeframe]);
 
   function refreshOverlays() {
     const chart = chartRef.current;
