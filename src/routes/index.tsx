@@ -13,6 +13,7 @@ import { BottomNav, type Tab } from "@/components/BottomNav";
 import { BotStatusPanel } from "@/components/BotStatusPanel";
 import { NotificationToggle } from "@/components/NotificationToggle";
 import { LiveStatusBadge } from "@/components/LiveStatusBadge";
+import { TickerTape } from "@/components/TickerTape";
 import {
   buildCandles,
   currentPrice,
@@ -198,6 +199,9 @@ function Home() {
           ))}
         </div>
       </header>
+
+      {/* Live ticker tape */}
+      <TickerTape />
 
       <main className="mx-auto max-w-5xl px-4 py-5">
         {/* Always-on portfolio bar */}
