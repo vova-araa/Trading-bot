@@ -27,8 +27,65 @@ export async function enableNotifications(): Promise<boolean> {
       icon: "/favicon.ico",
       tag: "ara-welcome",
     });
+    void subscribePush(); // register for background push if VAPID is configured
   }
   return ok;
+}
+
+function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
+  const pad = "=".repeat((4 - (base64.length % 4)) % 4);
+  const b64 = (base64 + pad).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(b64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+/** Subscribe this device for background Web Push (needs VITE_VAPID_PUBLIC_KEY). */
+export async function subscribePush(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  const vapid = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+  if (!vapid) return false; // no keys configured → in-app notifications only
+  try {
+    const reg = await getSwRegistration();
+    if (!reg) return false;
+    const existing = await reg.pushManager.getSubscription();
+    const sub =
+      existing ??
+      (await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapid),
+      }));
+    const { ownerKey } = await import("./bot-sync");
+    const res = await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ownerKey: ownerKey(),
+        subscription: sub.toJSON(),
+        userAgent: navigator.userAgent,
+      }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn("[push] subscribe failed", (err as Error).message);
+    return false;
+  }
+}
+
+/** Fire a test push to this device's subscriptions (via the server). */
+export async function sendTestPush(): Promise<{ ok: boolean; sent?: number; error?: string }> {
+  try {
+    const { ownerKey } = await import("./bot-sync");
+    const res = await fetch("/api/push/test", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ownerKey: ownerKey() }),
+    });
+    return (await res.json()) as { ok: boolean; sent?: number; error?: string };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
 }
 
 export function disableNotifications() {
@@ -73,33 +130,32 @@ export function pushSignal(
 
   // Prefer the service worker (works when tab is backgrounded / PWA closed
   // and supports action buttons). Fall back to a plain Notification.
-  void getSwRegistration().then((reg) => {
-    if (reg?.active) {
-      try {
-        reg.active.postMessage({
-          type: "SHOW_NOTIFICATION",
-          payload: { title, body, tag, url, actions, priority: opts?.priority ?? "normal" },
-        });
-        recordDelivery({ title, kind, via: "sw" });
-      } catch (err) {
-        recordError("sw.postMessage", err);
+  void getSwRegistration()
+    .then((reg) => {
+      if (reg?.active) {
+        try {
+          reg.active.postMessage({
+            type: "SHOW_NOTIFICATION",
+            payload: { title, body, tag, url, actions, priority: opts?.priority ?? "normal" },
+          });
+          recordDelivery({ title, kind, via: "sw" });
+        } catch (err) {
+          recordError("sw.postMessage", err);
+        }
+        return;
       }
-      return;
-    }
-    try {
-      new Notification(title, {
-        body,
-        icon: "/icon-192.png",
-        tag,
-        badge: "/icon-192.png",
-        requireInteraction: opts?.priority === "high",
-      });
-      recordDelivery({ title, kind, via: "fallback" });
-    } catch (err) {
-      recordError("Notification()", err);
-    }
-  }).catch((err) => recordError("getSwRegistration", err));
+      try {
+        new Notification(title, {
+          body,
+          icon: "/icon-192.png",
+          tag,
+          badge: "/icon-192.png",
+          requireInteraction: opts?.priority === "high",
+        });
+        recordDelivery({ title, kind, via: "fallback" });
+      } catch (err) {
+        recordError("Notification()", err);
+      }
+    })
+    .catch((err) => recordError("getSwRegistration", err));
 }
-
-
-

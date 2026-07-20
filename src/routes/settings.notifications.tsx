@@ -21,6 +21,7 @@ import {
   type VibratePreset,
 } from "@/lib/alert-sound";
 import { NotificationToggle } from "@/components/NotificationToggle";
+import { subscribePush, sendTestPush } from "@/lib/notifications";
 
 
 export const Route = createFileRoute("/settings/notifications")({
@@ -122,6 +123,9 @@ function NotifSettings() {
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-5">
+        {/* Background push */}
+        <PushSection />
+
         {/* Types */}
         <section className="panel mb-5 p-4">
           <div className="mb-3 flex items-center justify-between">
@@ -348,5 +352,49 @@ function NotifSettings() {
         </p>
       </main>
     </div>
+  );
+}
+
+function PushSection() {
+  const hasVapid = Boolean(import.meta.env.VITE_VAPID_PUBLIC_KEY);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function test() {
+    setBusy(true);
+    setMsg(null);
+    await subscribePush();
+    const r = await sendTestPush();
+    setBusy(false);
+    setMsg(
+      r.ok
+        ? `✓ Verstuurd naar ${r.sent ?? 0} apparaat(en). Check je meldingen.`
+        : `✕ ${r.error ?? "mislukt"} — controleer VAPID keys + Supabase.`,
+    );
+  }
+
+  return (
+    <section className="panel mb-5 p-4">
+      <h2 className="text-sm font-black uppercase tracking-wider">Achtergrond-push</h2>
+      <p className="mt-1 text-[12px] leading-snug text-muted-foreground">
+        Meldingen op je telefoon, ook met de app <b>dicht</b>. Vereist eenmalig VAPID-keys als
+        server-secret (<span className="mono">VAPID_PUBLIC_KEY</span>,{" "}
+        <span className="mono">VAPID_PRIVATE_KEY</span>,{" "}
+        <span className="mono">VITE_VAPID_PUBLIC_KEY</span>) + gekoppelde Supabase.
+      </p>
+      <div className="mt-3 flex items-center gap-3">
+        <button
+          onClick={test}
+          disabled={busy}
+          className="mono rounded-md bg-primary px-3 py-2 text-[11px] font-black uppercase tracking-wider text-primary-foreground disabled:opacity-50"
+        >
+          {busy ? "Testen…" : "🔔 Test push"}
+        </button>
+        <span className={`mono text-[10px] font-bold ${hasVapid ? "text-bull" : "text-warn"}`}>
+          {hasVapid ? "VAPID geconfigureerd" : "VAPID nog niet ingesteld"}
+        </span>
+      </div>
+      {msg && <div className="mono mt-2 text-[11px] text-muted-foreground">{msg}</div>}
+    </section>
   );
 }

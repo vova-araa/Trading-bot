@@ -21,6 +21,8 @@ import { Route as ApiNewsFeedRouteImport } from './routes/api/news/feed'
 import { Route as ApiEdgePredictionsRouteImport } from './routes/api/edge/predictions'
 import { Route as ApiEdgeCotRouteImport } from './routes/api/edge/cot'
 import { Route as ApiWebhooksTradingviewRouteImport } from './routes/api/webhooks/tradingview'
+import { Route as ApiPushSubscribeRouteImport } from './routes/api/push/subscribe'
+import { Route as ApiPushTestRouteImport } from './routes/api/push/test'
 
 const ProRoute = ProRouteImport.update({
   id: '/pro',
@@ -82,6 +84,16 @@ const ApiWebhooksTradingviewRoute = ApiWebhooksTradingviewRouteImport.update({
   path: '/api/webhooks/tradingview',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPushSubscribeRoute = ApiPushSubscribeRouteImport.update({
+  id: '/api/push/subscribe',
+  path: '/api/push/subscribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPushTestRoute = ApiPushTestRouteImport.update({
+  id: '/api/push/test',
+  path: '/api/push/test',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -96,6 +108,8 @@ export interface FileRoutesByFullPath {
   '/api/edge/predictions': typeof ApiEdgePredictionsRoute
   '/api/edge/cot': typeof ApiEdgeCotRoute
   '/api/webhooks/tradingview': typeof ApiWebhooksTradingviewRoute
+  '/api/push/subscribe': typeof ApiPushSubscribeRoute
+  '/api/push/test': typeof ApiPushTestRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -110,6 +124,8 @@ export interface FileRoutesByTo {
   '/api/edge/predictions': typeof ApiEdgePredictionsRoute
   '/api/edge/cot': typeof ApiEdgeCotRoute
   '/api/webhooks/tradingview': typeof ApiWebhooksTradingviewRoute
+  '/api/push/subscribe': typeof ApiPushSubscribeRoute
+  '/api/push/test': typeof ApiPushTestRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -125,6 +141,8 @@ export interface FileRoutesById {
   '/api/edge/predictions': typeof ApiEdgePredictionsRoute
   '/api/edge/cot': typeof ApiEdgeCotRoute
   '/api/webhooks/tradingview': typeof ApiWebhooksTradingviewRoute
+  '/api/push/subscribe': typeof ApiPushSubscribeRoute
+  '/api/push/test': typeof ApiPushTestRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -141,6 +159,8 @@ export interface FileRouteTypes {
     | '/api/edge/predictions'
     | '/api/edge/cot'
     | '/api/webhooks/tradingview'
+    | '/api/push/subscribe'
+    | '/api/push/test'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -155,6 +175,8 @@ export interface FileRouteTypes {
     | '/api/edge/predictions'
     | '/api/edge/cot'
     | '/api/webhooks/tradingview'
+    | '/api/push/subscribe'
+    | '/api/push/test'
   id:
     | '__root__'
     | '/'
@@ -169,6 +191,8 @@ export interface FileRouteTypes {
     | '/api/edge/predictions'
     | '/api/edge/cot'
     | '/api/webhooks/tradingview'
+    | '/api/push/subscribe'
+    | '/api/push/test'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -184,6 +208,8 @@ export interface RootRouteChildren {
   ApiEdgePredictionsRoute: typeof ApiEdgePredictionsRoute
   ApiEdgeCotRoute: typeof ApiEdgeCotRoute
   ApiWebhooksTradingviewRoute: typeof ApiWebhooksTradingviewRoute
+  ApiPushSubscribeRoute: typeof ApiPushSubscribeRoute
+  ApiPushTestRoute: typeof ApiPushTestRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -272,6 +298,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiWebhooksTradingviewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/push/subscribe': {
+      id: '/api/push/subscribe'
+      path: '/api/push/subscribe'
+      fullPath: '/api/push/subscribe'
+      preLoaderRoute: typeof ApiPushSubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/push/test': {
+      id: '/api/push/test'
+      path: '/api/push/test'
+      fullPath: '/api/push/test'
+      preLoaderRoute: typeof ApiPushTestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -288,6 +328,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiEdgePredictionsRoute: ApiEdgePredictionsRoute,
   ApiEdgeCotRoute: ApiEdgeCotRoute,
   ApiWebhooksTradingviewRoute: ApiWebhooksTradingviewRoute,
+  ApiPushSubscribeRoute: ApiPushSubscribeRoute,
+  ApiPushTestRoute: ApiPushTestRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
