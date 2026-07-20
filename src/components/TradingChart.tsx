@@ -13,7 +13,7 @@ import {
   type MouseEventParams,
 } from "lightweight-charts";
 import type { Candle, Timeframe } from "@/lib/market-data";
-import { buildCandles, onTick, SYMBOLS, TIMEFRAMES } from "@/lib/market-data";
+import { buildCandles, onTick, onLiveCandles, SYMBOLS, TIMEFRAMES } from "@/lib/market-data";
 import { ema, macd as macdCalc, bollinger, volumeProfile, rsi } from "@/lib/indicators";
 import { getWeekCalendar, type NewsItem } from "@/lib/news";
 import { symbolCurrencies, verdictFor, type EventVerdict } from "@/lib/chart-news";
@@ -147,15 +147,27 @@ export function TradingChart({
   // Recompute event markers whenever data or events change
   useEffect(() => { refreshEventMarkers(); }, [relevantEvents, showNews, symbolId, timeframe]);
 
-  // Load data on symbol/timeframe change
+  // Load data on symbol/timeframe change — and reload when live candles arrive
   useEffect(() => {
-    const sym = SYMBOLS.find((s) => s.id === symbolId);
-    if (!sym || !candleRef.current) return;
-    const candles = buildCandles(sym, timeframe);
-    dataRef.current = candles;
-    candleRef.current.setData(candles.map((c) => ({ ...c, time: c.time as UTCTimestamp })));
-    chartRef.current?.timeScale().fitContent();
-    refreshOverlays();
+    const load = () => {
+      const sym = SYMBOLS.find((s) => s.id === symbolId);
+      if (!sym || !candleRef.current) return;
+      const candles = buildCandles(sym, timeframe);
+      dataRef.current = candles;
+      candleRef.current.setData(candles.map((c) => ({ ...c, time: c.time as UTCTimestamp })));
+      chartRef.current?.timeScale().fitContent();
+      refreshOverlays();
+      refreshEventMarkers();
+    };
+    load();
+    const secs = TIMEFRAMES.find((t) => t.id === timeframe)!.seconds;
+    const off = onLiveCandles((id, s) => {
+      if (id === symbolId && s === secs) load();
+    });
+    return () => {
+      off();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbolId, timeframe]);
 
   // React to indicator toggles

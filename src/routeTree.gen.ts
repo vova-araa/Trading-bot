@@ -15,6 +15,8 @@ import { Route as TradeIdRouteImport } from './routes/trade.$id'
 import { Route as SettingsShortcutsRouteImport } from './routes/settings.shortcuts'
 import { Route as SettingsNotificationsRouteImport } from './routes/settings.notifications'
 import { Route as ApiPublicHooksBotsTickRouteImport } from './routes/api/public/hooks/bots-tick'
+import { Route as ApiMarketCandlesRouteImport } from './routes/api/market/candles'
+import { Route as ApiMarketQuotesRouteImport } from './routes/api/market/quotes'
 
 const ProRoute = ProRouteImport.update({
   id: '/pro',
@@ -46,6 +48,16 @@ const ApiPublicHooksBotsTickRoute = ApiPublicHooksBotsTickRouteImport.update({
   path: '/api/public/hooks/bots-tick',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMarketCandlesRoute = ApiMarketCandlesRouteImport.update({
+  id: '/api/market/candles',
+  path: '/api/market/candles',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMarketQuotesRoute = ApiMarketQuotesRouteImport.update({
+  id: '/api/market/quotes',
+  path: '/api/market/quotes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -54,6 +66,8 @@ export interface FileRoutesByFullPath {
   '/settings/shortcuts': typeof SettingsShortcutsRoute
   '/trade/$id': typeof TradeIdRoute
   '/api/public/hooks/bots-tick': typeof ApiPublicHooksBotsTickRoute
+  '/api/market/candles': typeof ApiMarketCandlesRoute
+  '/api/market/quotes': typeof ApiMarketQuotesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +76,8 @@ export interface FileRoutesByTo {
   '/settings/shortcuts': typeof SettingsShortcutsRoute
   '/trade/$id': typeof TradeIdRoute
   '/api/public/hooks/bots-tick': typeof ApiPublicHooksBotsTickRoute
+  '/api/market/candles': typeof ApiMarketCandlesRoute
+  '/api/market/quotes': typeof ApiMarketQuotesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,6 +87,8 @@ export interface FileRoutesById {
   '/settings/shortcuts': typeof SettingsShortcutsRoute
   '/trade/$id': typeof TradeIdRoute
   '/api/public/hooks/bots-tick': typeof ApiPublicHooksBotsTickRoute
+  '/api/market/candles': typeof ApiMarketCandlesRoute
+  '/api/market/quotes': typeof ApiMarketQuotesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -81,6 +99,8 @@ export interface FileRouteTypes {
     | '/settings/shortcuts'
     | '/trade/$id'
     | '/api/public/hooks/bots-tick'
+    | '/api/market/candles'
+    | '/api/market/quotes'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -89,6 +109,8 @@ export interface FileRouteTypes {
     | '/settings/shortcuts'
     | '/trade/$id'
     | '/api/public/hooks/bots-tick'
+    | '/api/market/candles'
+    | '/api/market/quotes'
   id:
     | '__root__'
     | '/'
@@ -97,6 +119,8 @@ export interface FileRouteTypes {
     | '/settings/shortcuts'
     | '/trade/$id'
     | '/api/public/hooks/bots-tick'
+    | '/api/market/candles'
+    | '/api/market/quotes'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -106,6 +130,8 @@ export interface RootRouteChildren {
   SettingsShortcutsRoute: typeof SettingsShortcutsRoute
   TradeIdRoute: typeof TradeIdRoute
   ApiPublicHooksBotsTickRoute: typeof ApiPublicHooksBotsTickRoute
+  ApiMarketCandlesRoute: typeof ApiMarketCandlesRoute
+  ApiMarketQuotesRoute: typeof ApiMarketQuotesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -152,6 +178,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksBotsTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/market/candles': {
+      id: '/api/market/candles'
+      path: '/api/market/candles'
+      fullPath: '/api/market/candles'
+      preLoaderRoute: typeof ApiMarketCandlesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/market/quotes': {
+      id: '/api/market/quotes'
+      path: '/api/market/quotes'
+      fullPath: '/api/market/quotes'
+      preLoaderRoute: typeof ApiMarketQuotesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -162,6 +202,8 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsShortcutsRoute: SettingsShortcutsRoute,
   TradeIdRoute: TradeIdRoute,
   ApiPublicHooksBotsTickRoute: ApiPublicHooksBotsTickRoute,
+  ApiMarketCandlesRoute: ApiMarketCandlesRoute,
+  ApiMarketQuotesRoute: ApiMarketQuotesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

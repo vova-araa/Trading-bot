@@ -1,7 +1,7 @@
 // Simulated trading bots inspired by Wundertrading (Grid, DCA, Signal, Pump).
 // Each bot ticks its own P&L based on the live market simulator.
 
-import { SYMBOLS, currentPrice, onTick } from "./market-data";
+import { SYMBOLS, currentPrice, onTick, dayChangePct, symbolSource } from "./market-data";
 import { findTemplate, type BotTemplate } from "./bot-marketplace";
 import { pushVersion, clearVersions } from "./bot-versions";
 import { autoBind, translateSymbol, type BrokerBinding } from "./broker-mapping";
@@ -361,13 +361,13 @@ export function startBotEngine() {
   });
 }
 
-// Pump screener: top movers since midnight
+// Pump screener: top movers since the day-open (real day-change when live).
 export function topMovers(limit = 5) {
   return SYMBOLS
     .map((s) => {
       const now = currentPrice(s.id);
-      const change = ((now - s.price) / s.price) * 100;
-      return { id: s.id, name: s.name, kind: s.kind, price: now, change };
+      const change = dayChangePct(s.id);
+      return { id: s.id, name: s.name, kind: s.kind, price: now, change, source: symbolSource(s.id) };
     })
     .sort((a, b) => Math.abs(b.change) - Math.abs(a.change))
     .slice(0, limit);

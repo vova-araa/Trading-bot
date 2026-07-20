@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { topMovers } from "@/lib/bots";
 import { formatPrice } from "@/lib/market-data";
+import { LiveStatusBadge } from "@/components/LiveStatusBadge";
 
 export function PumpScreener() {
   const [movers, setMovers] = useState(() => topMovers(5));
@@ -18,7 +19,7 @@ export function PumpScreener() {
             <div className="mono text-[10px] text-muted-foreground">Grootste bewegers vandaag</div>
           </div>
         </div>
-        <span className="mono text-[10px] text-muted-foreground">LIVE</span>
+        <LiveStatusBadge />
       </div>
       <div className="divide-y divide-panel-border/60">
         {movers.map((m, i) => {

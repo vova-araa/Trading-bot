@@ -1,6 +1,13 @@
-// Realtime market data simulator. Deterministic seed per symbol so
-// backfilled candles align with live ticks. Generates data from 00:00 UTC
-// today to the current second, then streams new ticks every 250-800ms.
+// Market data layer. Serves REAL live data when reachable and transparently
+// falls back to a deterministic simulator when it is not, behind one stable
+// synchronous API so every consumer (signals, charts, alerts, bots, pump,
+// portfolio) upgrades to live prices with zero changes.
+//
+//   • Crypto  → Binance public REST + WebSocket (CORS-friendly, no key).
+//   • FX / metals / indices / futures → /api/market/{quotes,candles}, a
+//     server-side proxy over Yahoo Finance (dodges CORS + provider auth).
+//   • No network / blocked host → the original synthetic engine keeps the
+//     whole app alive with plausible candles and ticks.
 
 export type Symbol = {
   id: string;
@@ -63,6 +70,8 @@ export const TIMEFRAMES: { id: Timeframe; label: string; seconds: number }[] = [
   { id: "1d", label: "1D", seconds: 86400 },
 ];
 
+const secondsFor = (tf: Timeframe) => TIMEFRAMES.find((t) => t.id === tf)!.seconds;
+
 // Deterministic PRNG
 function mulberry32(seed: number) {
   return function () {
@@ -93,7 +102,7 @@ function ticksForToday(sym: Symbol, upTo: number): number[] {
   const prices: number[] = [];
   let p = sym.price;
   // per-second drift ≈ vol% / sqrt(86400)
-  const stepSigma = (sym.vol / 100) / Math.sqrt(86400);
+  const stepSigma = sym.vol / 100 / Math.sqrt(86400);
   for (let i = 0; i < count; i++) {
     // occasional macro impulse
     const shock = rnd() < 0.0008 ? (rnd() - 0.5) * sym.vol * 0.02 : 0;
@@ -104,8 +113,13 @@ function ticksForToday(sym: Symbol, upTo: number): number[] {
   return prices;
 }
 
-export function buildCandles(sym: Symbol, tf: Timeframe, upTo = Math.floor(Date.now() / 1000)): Candle[] {
-  const secs = TIMEFRAMES.find((t) => t.id === tf)!.seconds;
+/** Deterministic synthetic candles — the offline fallback. */
+function syntheticCandles(
+  sym: Symbol,
+  tf: Timeframe,
+  upTo = Math.floor(Date.now() / 1000),
+): Candle[] {
+  const secs = secondsFor(tf);
   const start = startOfDayUTC(upTo * 1000);
   const ticks = ticksForToday(sym, upTo);
   const candles: Candle[] = [];
@@ -120,56 +134,374 @@ export function buildCandles(sym: Symbol, tf: Timeframe, upTo = Math.floor(Date.
     const close = slice[slice.length - 1];
     const high = Math.max(open, ...slice);
     const low = Math.min(open, ...slice);
-    const volume = slice.reduce((v, _, i) => v + 0.5 + Math.abs((slice[i] - (slice[i - 1] ?? slice[i])) * 1e5), 0);
+    const volume = slice.reduce(
+      (v, _, i) => v + 0.5 + Math.abs((slice[i] - (slice[i - 1] ?? slice[i])) * 1e5),
+      0,
+    );
     candles.push({ time: t, open, high, low, close, volume });
     prevClose = close;
   }
   return candles;
 }
 
-/** Build candles across N past days (ending at upTo). Deterministic per symbol/day. */
+// ────────────────────────────────────────────────────────────────
+// Live data layer
+// ────────────────────────────────────────────────────────────────
+
+const BINANCE_SYMBOL: Record<string, string> = {
+  BTCUSD: "BTCUSDT",
+  ETHUSD: "ETHUSDT",
+  SOLUSD: "SOLUSDT",
+  XRPUSD: "XRPUSDT",
+  DOGEUSD: "DOGEUSDT",
+  AVAXUSD: "AVAXUSDT",
+  LINKUSD: "LINKUSDT",
+  BTCPERP: "BTCUSDT",
+  ETHPERP: "ETHUSDT",
+};
+const isCrypto = (id: string) => !!BINANCE_SYMBOL[id];
+
+const BINANCE_INTERVAL: Record<number, string> = {
+  1: "1s",
+  60: "1m",
+  300: "5m",
+  900: "15m",
+  3600: "1h",
+  14400: "4h",
+  86400: "1d",
+};
+
+// live price + reference (day-open) + freshness, plus a candle cache per key.
+const refPrice = new Map<string, number>();
+const lastLiveAt = new Map<string, number>();
+const candleCache = new Map<string, { at: number; candles: Candle[] }>();
+const candleInflight = new Set<string>();
+
+const LIVE_FRESH_MS = 30_000;
+const isLiveFresh = (id: string) => {
+  const t = lastLiveAt.get(id);
+  return t != null && Date.now() - t < LIVE_FRESH_MS;
+};
+
+const candleTtl = (secs: number) =>
+  secs <= 15 ? 5000 : secs < 300 ? 20000 : secs < 3600 ? 60000 : 300000;
+
+/** Record a live price for a symbol and fan it out to tick listeners. */
+function pushLivePrice(id: string, price: number, ts = Math.floor(Date.now() / 1000)) {
+  if (!Number.isFinite(price) || price <= 0) return;
+  const wasLive = isLiveFresh(id);
+  state.set(id, price);
+  lastLiveAt.set(id, Date.now());
+  if (!wasLive) emitFeedStatus();
+  listeners.forEach((l) => l(id, price, ts));
+}
+
+function aggregateCandles(candles: Candle[], group: number): Candle[] {
+  if (group <= 1) return candles;
+  const out: Candle[] = [];
+  for (let i = 0; i < candles.length; i += group) {
+    const slice = candles.slice(i, i + group);
+    if (!slice.length) continue;
+    out.push({
+      time: slice[0].time,
+      open: slice[0].open,
+      high: Math.max(...slice.map((c) => c.high)),
+      low: Math.min(...slice.map((c) => c.low)),
+      close: slice[slice.length - 1].close,
+      volume: slice.reduce((s, c) => s + c.volume, 0),
+    });
+  }
+  return out;
+}
+
+async function fetchBinanceKlines(id: string, secs: number, limit: number): Promise<Candle[]> {
+  const sym = BINANCE_SYMBOL[id];
+  // 5s / 15s are not native Binance intervals — pull 1s and aggregate.
+  const native = BINANCE_INTERVAL[secs];
+  const interval = native ?? "1s";
+  const group = native ? 1 : secs; // seconds → 1s-candle count
+  const want = native ? limit : Math.min(1000, limit * group);
+  const url = `https://api.binance.com/api/v3/klines?symbol=${sym}&interval=${interval}&limit=${want}`;
+  const res = await fetch(url, { headers: { accept: "application/json" } });
+  if (!res.ok) throw new Error(`binance ${res.status}`);
+  const rows = (await res.json()) as unknown[][];
+  const raw: Candle[] = rows.map((r) => ({
+    time: Math.floor(Number(r[0]) / 1000),
+    open: Number(r[1]),
+    high: Number(r[2]),
+    low: Number(r[3]),
+    close: Number(r[4]),
+    volume: Number(r[5]),
+  }));
+  return native ? raw : aggregateCandles(raw, group).slice(-limit);
+}
+
+async function fetchProxyCandles(id: string, secs: number, limit: number): Promise<Candle[]> {
+  const res = await fetch(
+    `/api/market/candles?id=${encodeURIComponent(id)}&secs=${secs}&limit=${limit}`,
+  );
+  if (!res.ok) throw new Error(`proxy ${res.status}`);
+  const json = (await res.json()) as { ok: boolean; candles?: Candle[] };
+  if (!json.ok || !json.candles?.length) throw new Error("proxy empty");
+  return json.candles;
+}
+
+/** Kick a background refresh of live candles for one (symbol, timeframe). */
+function refreshLiveCandles(id: string, tf: Timeframe) {
+  if (typeof window === "undefined" || !liveEnabled) return;
+  const secs = secondsFor(tf);
+  // Non-crypto sub-minute has no upstream — leave it to the simulator.
+  if (!isCrypto(id) && secs < 60) return;
+  const key = `${id}|${secs}`;
+  const hit = candleCache.get(key);
+  if (hit && Date.now() - hit.at < candleTtl(secs)) return;
+  if (candleInflight.has(key)) return;
+  candleInflight.add(key);
+  const limit = 400;
+  const p = isCrypto(id) ? fetchBinanceKlines(id, secs, limit) : fetchProxyCandles(id, secs, limit);
+  p.then((candles) => {
+    if (candles.length) {
+      candleCache.set(key, { at: Date.now(), candles });
+      const lastCandle = candles[candles.length - 1];
+      pushLivePrice(id, lastCandle.close, lastCandle.time);
+      candleListeners.forEach((l) => l(id, secs));
+    }
+  })
+    .catch(() => {
+      /* keep simulator */
+    })
+    .finally(() => {
+      candleInflight.delete(key);
+    });
+}
+
+export function buildCandles(
+  sym: Symbol,
+  tf: Timeframe,
+  upTo = Math.floor(Date.now() / 1000),
+): Candle[] {
+  const secs = secondsFor(tf);
+  const isNowWindow = upTo >= Math.floor(Date.now() / 1000) - 3;
+  if (isNowWindow) {
+    refreshLiveCandles(sym.id, tf);
+    const hit = candleCache.get(`${sym.id}|${secs}`);
+    if (hit && hit.candles.length) return hit.candles;
+  }
+  return syntheticCandles(sym, tf, upTo);
+}
+
+/** Build candles across N past days (ending at upTo). Live when a recent
+ *  window is cached; deterministic synthetic otherwise. */
 export function buildHistoricalCandles(
   sym: Symbol,
   tf: Timeframe,
   days: number,
   upTo = Math.floor(Date.now() / 1000),
 ): Candle[] {
+  const secs = secondsFor(tf);
+  const isNowWindow = upTo >= Math.floor(Date.now() / 1000) - 3;
+  if (isNowWindow) {
+    refreshLiveCandles(sym.id, tf);
+    const hit = candleCache.get(`${sym.id}|${secs}`);
+    if (hit && hit.candles.length > 1) return hit.candles;
+  }
   const out: Candle[] = [];
   const dayStart = startOfDayUTC(upTo * 1000);
   for (let d = days - 1; d >= 0; d--) {
     const end = d === 0 ? upTo : dayStart - (d - 1) * 86400;
-    const dayCandles = buildCandles(sym, tf, end);
-    out.push(...dayCandles);
+    out.push(...syntheticCandles(sym, tf, end));
   }
   return out;
 }
 
-/** Global tick bus: emits new price for every symbol on a randomized cadence. */
+// ── Live feed wiring ────────────────────────────────────────────
+let liveEnabled = true;
+let ws: WebSocket | null = null;
+let wsRetry = 0;
+
+const BINANCE_TO_ARA: Record<string, string[]> = (() => {
+  const m: Record<string, string[]> = {};
+  for (const [ara, bin] of Object.entries(BINANCE_SYMBOL)) (m[bin] ??= []).push(ara);
+  return m;
+})();
+
+function connectBinanceWs() {
+  if (typeof window === "undefined") return;
+  const streams = Array.from(new Set(Object.values(BINANCE_SYMBOL)))
+    .map((s) => `${s.toLowerCase()}@trade`)
+    .join("/");
+  try {
+    ws = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${streams}`);
+  } catch {
+    scheduleWsReconnect();
+    return;
+  }
+  ws.onopen = () => {
+    wsRetry = 0;
+    emitFeedStatus();
+  };
+  ws.onmessage = (ev) => {
+    try {
+      const msg = JSON.parse(ev.data as string) as {
+        data?: { s?: string; p?: string; T?: number };
+      };
+      const d = msg.data;
+      if (!d?.s || !d.p) return;
+      const price = Number(d.p);
+      const ts = d.T ? Math.floor(d.T / 1000) : Math.floor(Date.now() / 1000);
+      for (const ara of BINANCE_TO_ARA[d.s] ?? []) pushLivePrice(ara, price, ts);
+    } catch {
+      /* ignore malformed frame */
+    }
+  };
+  ws.onerror = () => {
+    try {
+      ws?.close();
+    } catch {
+      /* noop */
+    }
+  };
+  ws.onclose = () => {
+    ws = null;
+    emitFeedStatus();
+    if (liveEnabled) scheduleWsReconnect();
+  };
+}
+function scheduleWsReconnect() {
+  wsRetry = Math.min(wsRetry + 1, 6);
+  setTimeout(
+    () => {
+      if (liveEnabled && !ws) connectBinanceWs();
+    },
+    1000 * 2 ** wsRetry,
+  );
+}
+
+let pollTimer: ReturnType<typeof setTimeout> | null = null;
+async function pollQuotes() {
+  try {
+    const ids = SYMBOLS.map((s) => s.id).join(",");
+    const res = await fetch(`/api/market/quotes?ids=${encodeURIComponent(ids)}`);
+    if (res.ok) {
+      const json = (await res.json()) as {
+        ok: boolean;
+        quotes?: { id: string; price: number; ref: number }[];
+      };
+      for (const q of json.quotes ?? []) {
+        if (Number.isFinite(q.ref) && q.ref > 0) refPrice.set(q.id, q.ref);
+        // WebSocket owns fresh crypto prices; only fill non-crypto (or stale crypto) here.
+        if (!isCrypto(q.id) || !isLiveFresh(q.id)) pushLivePrice(q.id, q.price);
+      }
+    }
+  } catch {
+    /* stay on simulator */
+  }
+  pollTimer = setTimeout(pollQuotes, 5000);
+}
+
+// ── Tick bus ────────────────────────────────────────────────────
 type Listener = (id: string, price: number, ts: number) => void;
 const listeners = new Set<Listener>();
 const state = new Map<string, number>();
 
+type CandleListener = (id: string, secs: number) => void;
+const candleListeners = new Set<CandleListener>();
+
+type FeedStatus = { connected: boolean; liveCount: number; total: number; wsOpen: boolean };
+type FeedListener = (s: FeedStatus) => void;
+const feedListeners = new Set<FeedListener>();
+
 SYMBOLS.forEach((s) => state.set(s.id, s.price));
+
+export function getFeedStatus(): FeedStatus {
+  const liveCount = SYMBOLS.reduce((n, s) => n + (isLiveFresh(s.id) ? 1 : 0), 0);
+  return {
+    connected: liveCount > 0,
+    liveCount,
+    total: SYMBOLS.length,
+    wsOpen: !!ws && ws.readyState === 1,
+  };
+}
+let lastStatusKey = "";
+function emitFeedStatus() {
+  const s = getFeedStatus();
+  const key = `${s.liveCount}|${s.wsOpen}`;
+  if (key === lastStatusKey) return;
+  lastStatusKey = key;
+  feedListeners.forEach((l) => l(s));
+}
+export function onFeedStatus(l: FeedListener) {
+  feedListeners.add(l);
+  l(getFeedStatus());
+  return () => feedListeners.delete(l);
+}
+export function onLiveCandles(l: CandleListener) {
+  candleListeners.add(l);
+  return () => candleListeners.delete(l);
+}
+
+/** Is this symbol currently driven by real live data? */
+export function symbolSource(id: string): "live" | "sim" {
+  return isLiveFresh(id) ? "live" : "sim";
+}
+
+/** Percent change since the reference (day-open) price. */
+export function dayChangePct(id: string): number {
+  const price = state.get(id);
+  if (price == null) return 0;
+  const ref = refPrice.get(id);
+  if (ref && ref > 0) return ((price - ref) / ref) * 100;
+  const base = SYMBOLS.find((s) => s.id === id)?.price;
+  return base ? ((price - base) / base) * 100 : 0;
+}
 
 let started = false;
 export function startTickStream() {
   if (started || typeof window === "undefined") return;
   started = true;
+
+  // 1) Simulator drives every symbol immediately; it steps aside per-symbol the
+  //    moment real data starts flowing (isLiveFresh), and resumes if it stops.
   SYMBOLS.forEach((s) => {
-    const stepSigma = (s.vol / 100) / Math.sqrt(86400);
+    const stepSigma = s.vol / 100 / Math.sqrt(86400);
     const rnd = mulberry32(seedFor(s.id) + Math.floor(Date.now() / 1000));
     const tick = () => {
-      const cur = state.get(s.id)!;
-      const drift = (rnd() - 0.5) * 2 * stepSigma;
-      const shock = rnd() < 0.005 ? (rnd() - 0.5) * s.vol * 0.008 : 0;
-      const next = cur * (1 + drift + shock);
-      state.set(s.id, next);
-      const ts = Math.floor(Date.now() / 1000);
-      listeners.forEach((l) => l(s.id, next, ts));
+      if (!isLiveFresh(s.id)) {
+        const cur = state.get(s.id)!;
+        const drift = (rnd() - 0.5) * 2 * stepSigma;
+        const shock = rnd() < 0.005 ? (rnd() - 0.5) * s.vol * 0.008 : 0;
+        const next = cur * (1 + drift + shock);
+        state.set(s.id, next);
+        const ts = Math.floor(Date.now() / 1000);
+        listeners.forEach((l) => l(s.id, next, ts));
+      }
       setTimeout(tick, 250 + Math.random() * 550);
     };
     setTimeout(tick, Math.random() * 800);
   });
+
+  // 2) Bring the real feed online (no-ops gracefully if the network blocks it).
+  if (liveEnabled) {
+    connectBinanceWs();
+    void pollQuotes();
+    // Warm the default 1m candle cache so signals/scanner go live fast.
+    SYMBOLS.forEach((s) => refreshLiveCandles(s.id, "1m"));
+  }
+}
+
+/** Force the app onto the deterministic simulator (used by tests/offline). */
+export function disableLiveFeed() {
+  liveEnabled = false;
+  try {
+    ws?.close();
+  } catch {
+    /* noop */
+  }
+  ws = null;
+  if (pollTimer) {
+    clearTimeout(pollTimer);
+    pollTimer = null;
+  }
 }
 
 export function onTick(l: Listener) {

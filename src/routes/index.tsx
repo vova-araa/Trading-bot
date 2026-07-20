@@ -12,6 +12,7 @@ import { BrokerList } from "@/components/BrokerCard";
 import { BottomNav, type Tab } from "@/components/BottomNav";
 import { BotStatusPanel } from "@/components/BotStatusPanel";
 import { NotificationToggle } from "@/components/NotificationToggle";
+import { LiveStatusBadge } from "@/components/LiveStatusBadge";
 import {
   buildCandles,
   currentPrice,
@@ -143,8 +144,9 @@ function Home() {
                 ARA <span className="text-primary">TRADES</span>
               </div>
               <div className="mono flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <span className="live-dot inline-block h-1.5 w-1.5 rounded-full bg-bull" />
-                LIVE · {now}
+                <LiveStatusBadge compact />
+                <span className="text-panel-border">·</span>
+                {now}
                 {deployedCount > 0 && (
                   <span className="ml-1 rounded-full bg-bull/15 px-1.5 py-0.5 text-[9px] font-black text-bull">
                     {deployedCount} bot{deployedCount > 1 ? "s" : ""} 24/7
