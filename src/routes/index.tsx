@@ -19,6 +19,7 @@ import { MarketPulse } from "@/components/MarketPulse";
 import { EdgeTab } from "@/components/EdgeTab";
 import { PredictionMarkets } from "@/components/PredictionMarkets";
 import { startPositionEngine } from "@/lib/positions";
+import { startFlowRadar } from "@/lib/flow-radar";
 import {
   buildCandles,
   currentPrice,
@@ -102,6 +103,7 @@ function Home() {
     startPositionEngine();
     startAlertEngine();
     startNewsNotifier();
+    startFlowRadar();
     void registerAraServiceWorker();
   }, []);
   useEffect(() => {
@@ -201,7 +203,7 @@ function Home() {
           {([
             { id: "signals", label: "🎯 Signalen" },
             { id: "chart", label: "📈 Chart" },
-            { id: "edge", label: "🐋 Edge" },
+            { id: "edge", label: "📡 Edge" },
             { id: "alerts", label: "🔔 Alarmen" },
             { id: "news", label: "📰 Nieuws" },
             { id: "bots", label: "🤖 Mijn Bots" },
@@ -285,10 +287,11 @@ function Home() {
         {tab === "edge" && (
           <>
             <div className="mb-3">
-              <h2 className="text-lg font-black tracking-tight">🐋 Smart Money Edge</h2>
+              <h2 className="text-lg font-black tracking-tight">📡 Smart Money Edge</h2>
               <p className="text-[12px] text-muted-foreground">
-                Zie live wanneer walvissen en instituten in- of uitstappen, wie er geliquideerd
-                wordt, en wat de markt verwacht <em>vóór</em> het nieuws uitkomt.
+                Vroege waarschuwing bij grote (institutionele) bewegingen op goud, forex, Nasdaq en
+                olie, een afteller naar het volgende high-impact event, en wat de markt verwacht{" "}
+                <em>vóór</em> het nieuws uitkomt — zodat je op tijd kunt instappen.
               </p>
             </div>
             <EdgeTab />

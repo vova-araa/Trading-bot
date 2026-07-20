@@ -13,7 +13,7 @@ type Tab =
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "signals", label: "Signalen", icon: "🎯" },
   { id: "chart", label: "Chart", icon: "📈" },
-  { id: "edge", label: "Edge", icon: "🐋" },
+  { id: "edge", label: "Edge", icon: "📡" },
   { id: "alerts", label: "Alarmen", icon: "🔔" },
   { id: "bots", label: "Bots", icon: "🤖" },
   { id: "news", label: "Nieuws", icon: "📰" },

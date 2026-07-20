@@ -41,10 +41,11 @@ const KEYWORDS: { re: RegExp; tag: string }[] = [
     tag: "Fed / rente",
   },
   { re: /\bcpi\b|inflation|\bpce\b|core inflation/i, tag: "Inflatie" },
-  { re: /recession|gdp|jobs report|unemployment|nonfarm|payroll/i, tag: "Macro" },
-  { re: /bitcoin|\bbtc\b/i, tag: "Bitcoin" },
-  { re: /ethereum|\beth\b/i, tag: "Ethereum" },
+  { re: /recession|\bgdp\b|jobs report|unemployment|nonfarm|payroll/i, tag: "Macro" },
   { re: /gold|\bxau\b/i, tag: "Goud" },
+  { re: /oil|crude|\bwti\b|\bopec\b/i, tag: "Olie" },
+  { re: /nasdaq|s&p|\bspx\b|dow jones|stock market|\bequit/i, tag: "Indices" },
+  { re: /dollar|\beur\b|euro|\bgbp\b|\bjpy\b|\byen\b/i, tag: "Forex" },
 ];
 
 function classify(q: string): string | null {

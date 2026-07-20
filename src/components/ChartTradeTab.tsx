@@ -17,7 +17,7 @@ import {
 } from "@/lib/market-data";
 import { STRATEGIES, type FibOverlay } from "@/lib/strategies";
 
-const KINDS = ["all", "crypto", "forex", "metal", "index", "futures"] as const;
+const KINDS = ["all", "forex", "metal", "index", "futures"] as const;
 type KindFilter = (typeof KINDS)[number];
 
 const LS_SYM = "ara.chart.sym";
@@ -56,7 +56,10 @@ function saveLS<T>(k: string, v: T) {
 // Mobile-first chart + trade surface: live candles (all timeframes down to 1s),
 // volume, indicator toggles, and an order ticket to trade straight from here.
 export function ChartTradeTab() {
-  const [symbol, setSymbol] = useState<string>(() => loadLS(LS_SYM, "BTCUSD"));
+  const [symbol, setSymbol] = useState<string>(() => {
+    const s = loadLS(LS_SYM, "XAUUSD");
+    return SYMBOLS.some((x) => x.id === s) ? s : "XAUUSD"; // guard stale/removed symbols
+  });
   const [tf, setTf] = useState<Timeframe>(() => loadLS<Timeframe>(LS_TF, "1m"));
   const [indicators, setIndicators] = useState<IndicatorFlags>(() =>
     loadLS(LS_IND, defaultIndicators),

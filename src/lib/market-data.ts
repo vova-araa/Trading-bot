@@ -27,13 +27,6 @@ export const SYMBOLS: Symbol[] = [
   { id: "USDCHF", name: "US Dollar / Swiss", kind: "forex", price: 0.9042, vol: 0.5 },
   { id: "EURJPY", name: "Euro / Yen", kind: "forex", price: 170.51, vol: 0.8 },
   { id: "GBPJPY", name: "Pound / Yen", kind: "forex", price: 200.24, vol: 1.1 },
-  { id: "BTCUSD", name: "Bitcoin", kind: "crypto", price: 67420, vol: 3.2 },
-  { id: "ETHUSD", name: "Ethereum", kind: "crypto", price: 3512, vol: 3.8 },
-  { id: "SOLUSD", name: "Solana", kind: "crypto", price: 168.4, vol: 5.5 },
-  { id: "XRPUSD", name: "Ripple", kind: "crypto", price: 0.612, vol: 4.4 },
-  { id: "DOGEUSD", name: "Dogecoin", kind: "crypto", price: 0.152, vol: 6.8 },
-  { id: "AVAXUSD", name: "Avalanche", kind: "crypto", price: 34.8, vol: 5.9 },
-  { id: "LINKUSD", name: "Chainlink", kind: "crypto", price: 14.6, vol: 5.2 },
   { id: "XAUUSD", name: "Gold Spot", kind: "metal", price: 2412.8, vol: 1.2 },
   { id: "XAGUSD", name: "Silver Spot", kind: "metal", price: 29.84, vol: 2.4 },
   { id: "US30", name: "Dow Jones", kind: "index", price: 39804, vol: 0.8 },
@@ -43,8 +36,6 @@ export const SYMBOLS: Symbol[] = [
   { id: "NQ", name: "E-mini Nasdaq Futures", kind: "futures", price: 19425, vol: 1.2 },
   { id: "CL", name: "Crude Oil Futures", kind: "futures", price: 78.45, vol: 2.1 },
   { id: "GC", name: "Gold Futures", kind: "futures", price: 2414.5, vol: 1.3 },
-  { id: "BTCPERP", name: "Bitcoin Perpetual", kind: "futures", price: 67450, vol: 3.4 },
-  { id: "ETHPERP", name: "Ethereum Perpetual", kind: "futures", price: 3514, vol: 4.0 },
 ];
 
 export type Candle = {
@@ -148,18 +139,12 @@ function syntheticCandles(
 // Live data layer
 // ────────────────────────────────────────────────────────────────
 
-const BINANCE_SYMBOL: Record<string, string> = {
-  BTCUSD: "BTCUSDT",
-  ETHUSD: "ETHUSDT",
-  SOLUSD: "SOLUSDT",
-  XRPUSD: "XRPUSDT",
-  DOGEUSD: "DOGEUSDT",
-  AVAXUSD: "AVAXUSDT",
-  LINKUSD: "LINKUSDT",
-  BTCPERP: "BTCUSDT",
-  ETHPERP: "ETHUSDT",
-};
+// Crypto has been removed — focus is FX, metals, indices and oil, all served by
+// the Yahoo/Stooq proxy. The map is kept (empty) so the Binance code paths below
+// simply no-op; isCrypto is always false.
+const BINANCE_SYMBOL: Record<string, string> = {};
 const isCrypto = (id: string) => !!BINANCE_SYMBOL[id];
+const hasCrypto = Object.keys(BINANCE_SYMBOL).length > 0;
 
 const BINANCE_INTERVAL: Record<number, string> = {
   1: "1s",
@@ -486,7 +471,7 @@ export function startTickStream() {
 
   // 2) Bring the real feed online (no-ops gracefully if the network blocks it).
   if (liveEnabled) {
-    connectBinanceWs();
+    if (hasCrypto) connectBinanceWs();
     void pollQuotes();
     // Warm the default 1m candle cache so signals/scanner go live fast. Crypto
     // (Binance) can all fire at once; non-crypto (Yahoo) is staggered so we

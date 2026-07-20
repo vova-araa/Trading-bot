@@ -1,27 +1,9 @@
 import { useEffect, useState } from "react";
-import { formatPrice } from "@/lib/market-data";
-import {
-  startSmartMoney,
-  onWhale,
-  onLiquidation,
-  recentWhales,
-  recentLiquidations,
-  whaleFlow,
-  aggregateBias,
-  WHALE_MIN_USD,
-  type WhaleTrade,
-  type Liquidation,
-} from "@/lib/smart-money";
+import { SYMBOLS, formatPrice } from "@/lib/market-data";
+import { startFlowRadar, onFlow, recentFlow, symbolHeat, type FlowEvent } from "@/lib/flow-radar";
+import { getNextEvent, formatCountdown, type NewsItem } from "@/lib/news";
 import { PredictionMarkets } from "@/components/PredictionMarkets";
 
-const CRYPTO = ["BTCUSD", "ETHUSD", "SOLUSD", "XRPUSD", "DOGEUSD", "AVAXUSD", "LINKUSD"];
-
-function usd(n: number): string {
-  if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
-  if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
-  if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}K`;
-  return `$${n.toFixed(0)}`;
-}
 function ago(t: number): string {
   const s = Math.floor((Date.now() - t) / 1000);
   if (s < 60) return `${s}s`;
@@ -29,187 +11,177 @@ function ago(t: number): string {
   return `${Math.floor(s / 3600)}u`;
 }
 
-// "Smart money" edge surface: real whale prints + liquidations from Binance,
-// aggregate bias, and prediction-market odds (the outcome before the news).
+// Smart-money edge for FX / metals / indices / oil: institutional activity
+// inferred from volume + volatility surges (with early-warning alerts), a
+// countdown to the next high-impact event, and prediction-market odds.
 export function EdgeTab() {
   const [, force] = useState(0);
-  const [connected, setConnected] = useState(false);
+  const [flashed, setFlashed] = useState<FlowEvent | null>(null);
 
   useEffect(() => {
-    startSmartMoney();
-    let gotData = false;
-    const bump = () => {
-      gotData = true;
+    startFlowRadar();
+    const off = onFlow((e) => {
+      setFlashed(e);
       force((n) => n + 1);
-    };
-    const offW = onWhale(bump);
-    const offL = onLiquidation(bump);
-    const iv = setInterval(() => {
-      setConnected(gotData);
-      force((n) => n + 1);
-    }, 1000);
+    });
+    const iv = setInterval(() => force((n) => n + 1), 1000);
     return () => {
-      offW();
-      offL();
+      off();
       clearInterval(iv);
     };
   }, []);
 
-  const bias = aggregateBias();
-  const total = bias.buyUsd + bias.sellUsd;
-  const buyPct = total > 0 ? (bias.buyUsd / total) * 100 : 50;
-  const whales = recentWhales(30);
-  const liquidations = recentLiquidations(24);
+  // Live surge heat per instrument, hottest first.
+  const heat = SYMBOLS.map((s) => ({ id: s.id, ...symbolHeat(s.id) }))
+    .filter((h) => h.score > 0.2)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10);
+  const events = recentFlow(24);
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Aggregate smart-money bias */}
-      <div className="panel p-3">
-        <div className="mb-2 flex items-center justify-between">
+      {/* Latest big-move flash */}
+      {flashed && Date.now() - flashed.time < 20000 && (
+        <div
+          className={`mono flex items-center justify-between rounded-md border px-3 py-2 text-[11px] ${
+            flashed.dir === "up"
+              ? "border-bull/50 bg-bull/10 text-bull"
+              : "border-bear/50 bg-bear/10 text-bear"
+          }`}
+        >
+          <span className="font-black uppercase tracking-wider">
+            🚨 {flashed.symbol} · grote {flashed.kind} {flashed.dir === "up" ? "▲" : "▼"}
+          </span>
+          <span className="text-muted-foreground">instap-kans · nu</span>
+        </div>
+      )}
+
+      <NextEventCard />
+
+      {/* Live institutional activity heat */}
+      <div className="panel overflow-hidden">
+        <div className="flex items-center justify-between border-b border-panel-border/60 px-3 py-2">
           <div>
-            <div className="text-sm font-black">🐋 Smart-money bias</div>
+            <div className="text-sm font-black">📡 Institutionele activiteit</div>
             <div className="mono text-[10px] text-muted-foreground">
-              Netto walvis-flow (5 min) over alle crypto
+              Volume- & volatiliteits-surges (goud, forex, Nasdaq, olie)
             </div>
           </div>
-          <span
-            className={`mono flex items-center gap-1 text-[10px] ${connected ? "text-bull" : "text-warn"}`}
-          >
-            <span
-              className={`live-dot inline-block h-1.5 w-1.5 rounded-full ${connected ? "bg-bull" : "bg-warn"}`}
-            />
-            {connected ? "LIVE" : "verbinden…"}
+          <span className="mono flex items-center gap-1 text-[10px] text-muted-foreground">
+            <span className="live-dot inline-block h-1.5 w-1.5 rounded-full bg-bull" />
+            live
           </span>
         </div>
-        <div className="flex h-3 overflow-hidden rounded-full bg-panel-border/40">
-          <div className="bg-bull transition-all" style={{ width: `${buyPct}%` }} />
-          <div className="bg-bear transition-all" style={{ width: `${100 - buyPct}%` }} />
-        </div>
-        <div className="mono mt-1 flex items-center justify-between text-[10px]">
-          <span className="font-black text-bull">▲ kopen {usd(bias.buyUsd)}</span>
-          <span className={`font-black ${bias.net >= 0 ? "text-bull" : "text-bear"}`}>
-            netto {bias.net >= 0 ? "+" : "−"}
-            {usd(Math.abs(bias.net))}
-          </span>
-          <span className="font-black text-bear">verkopen {usd(bias.sellUsd)} ▼</span>
+        {heat.length === 0 ? (
+          <div className="p-4 text-center text-[11px] text-muted-foreground">
+            Rustige markt — nog geen grote activiteit gedetecteerd.
+          </div>
+        ) : (
+          <div className="divide-y divide-panel-border/60">
+            {heat.map((h) => {
+              const pct = Math.min(100, (h.score / 4) * 100);
+              const hot = h.score >= 2.6;
+              return (
+                <div key={h.id} className="flex items-center gap-2 px-3 py-1.5">
+                  <span className="mono w-16 shrink-0 text-[11px] font-black">{h.id}</span>
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-panel-border/40">
+                    <div
+                      className={h.dir === "up" ? "h-full bg-bull" : "h-full bg-bear"}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <span
+                    className={`mono w-14 shrink-0 text-right text-[10px] font-black tabular-nums ${hot ? (h.dir === "up" ? "text-bull" : "text-bear") : "text-muted-foreground"}`}
+                  >
+                    {hot ? "🔥 " : ""}
+                    {h.score.toFixed(1)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="mono border-t border-panel-border/60 px-3 py-1.5 text-[9px] text-muted-foreground">
+          Score ≥ 2.6 = grote speler actief · afgeleid uit futures-volume + range-expansie
         </div>
       </div>
 
-      {/* Per-symbol whale flow */}
+      {/* Big-move tape */}
       <div className="panel overflow-hidden">
         <div className="border-b border-panel-border/60 px-3 py-2 text-sm font-black">
-          Walvis-flow per munt
+          🐋 Grote bewegingen (vroege signalen)
         </div>
-        <div className="divide-y divide-panel-border/60">
-          {CRYPTO.map((sym) => {
-            const f = whaleFlow(sym);
-            const t = f.buyUsd + f.sellUsd;
-            const bp = t > 0 ? (f.buyUsd / t) * 100 : 50;
-            return (
-              <div key={sym} className="flex items-center gap-2 px-3 py-1.5">
-                <span className="mono w-16 shrink-0 text-[11px] font-black">{sym}</span>
-                <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-panel-border/40">
-                  <div className="bg-bull" style={{ width: `${bp}%` }} />
-                  <div className="bg-bear" style={{ width: `${100 - bp}%` }} />
-                </div>
+        {events.length === 0 ? (
+          <div className="p-4 text-center text-[11px] text-muted-foreground">
+            Wachten op grote bewegingen…
+          </div>
+        ) : (
+          <div className="max-h-[320px] divide-y divide-panel-border/60 overflow-y-auto">
+            {events.map((e) => (
+              <div key={e.id} className="flex items-center gap-2 px-3 py-1.5">
                 <span
-                  className={`mono w-20 shrink-0 text-right text-[10px] font-black tabular-nums ${f.net >= 0 ? "text-bull" : "text-bear"}`}
+                  className={`mono shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black ${e.dir === "up" ? "bg-bull/15 text-bull" : "bg-bear/15 text-bear"}`}
                 >
-                  {f.net >= 0 ? "+" : "−"}
-                  {usd(Math.abs(f.net))}
+                  {e.dir === "up" ? "▲ UP" : "▼ DOWN"}
+                </span>
+                <span className="mono w-16 shrink-0 text-[11px] font-black">{e.symbol}</span>
+                <span className="min-w-0 flex-1 truncate text-[11px]">
+                  <span className="font-black">{e.kind}</span>
+                  <span className="mono ml-1 text-[9px] text-muted-foreground">
+                    @ {formatPrice(e.symbol, e.price)} · score {e.score.toFixed(1)}
+                  </span>
+                </span>
+                <span className="mono shrink-0 text-[9px] text-muted-foreground">
+                  {ago(e.time)}
                 </span>
               </div>
-            );
-          })}
-        </div>
-        <div className="mono border-t border-panel-border/60 px-3 py-1.5 text-[9px] text-muted-foreground">
-          Trades ≥ {usd(WHALE_MIN_USD)} tellen als walvis · bron Binance aggTrade
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Whale tape + liquidations side by side on desktop */}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <WhaleTape whales={whales} />
-        <LiquidationFeed liqs={liquidations} />
-      </div>
-
-      {/* Prediction markets — outcome before the news */}
       <PredictionMarkets />
     </div>
   );
 }
 
-function WhaleTape({ whales }: { whales: WhaleTrade[] }) {
+// Countdown to the next high-impact economic event — position before the print.
+function NextEventCard() {
+  const [ev, setEv] = useState<NewsItem | undefined>(() => getNextEvent(Date.now(), "high"));
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const iv = setInterval(() => {
+      setEv(getNextEvent(Date.now(), "high"));
+      tick((n) => n + 1);
+    }, 1000);
+    return () => clearInterval(iv);
+  }, []);
+  if (!ev) return null;
+  const secs = ev.time - Math.floor(Date.now() / 1000);
+  const soon = secs <= 900; // within 15 min
   return (
-    <div className="panel overflow-hidden">
-      <div className="border-b border-panel-border/60 px-3 py-2 text-sm font-black">
-        🐋 Walvis-tape
+    <div className={`panel flex items-center gap-3 p-3 ${soon ? "ring-1 ring-warn/60" : ""}`}>
+      <span className="text-2xl">{ev.country}</span>
+      <div className="min-w-0 flex-1">
+        <div className="mono text-[9px] uppercase tracking-widest text-muted-foreground">
+          Volgende high-impact event · {ev.currency}
+        </div>
+        <div className="truncate text-[13px] font-black">{ev.title}</div>
+        {ev.forecast && (
+          <div className="mono text-[10px] text-muted-foreground">
+            verwacht {ev.forecast}
+            {ev.previous && ` · vorige ${ev.previous}`}
+          </div>
+        )}
       </div>
-      {whales.length === 0 ? (
-        <div className="p-4 text-center text-[11px] text-muted-foreground">
-          Wachten op grote trades…
+      <div className="shrink-0 text-right">
+        <div
+          className={`mono text-[15px] font-black tabular-nums ${soon ? "text-warn" : "text-foreground"}`}
+        >
+          {formatCountdown(secs)}
         </div>
-      ) : (
-        <div className="max-h-[320px] divide-y divide-panel-border/60 overflow-y-auto">
-          {whales.map((w) => (
-            <div key={w.id} className="flex items-center gap-2 px-3 py-1.5">
-              <span
-                className={`mono shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black ${w.side === "buy" ? "bg-bull/15 text-bull" : "bg-bear/15 text-bear"}`}
-              >
-                {w.side === "buy" ? "▲ KOOP" : "▼ VERK"}
-              </span>
-              <span className="mono w-16 shrink-0 text-[11px] font-black">{w.symbol}</span>
-              <span className="min-w-0 flex-1 truncate">
-                {w.mega && <span className="mr-1">💥</span>}
-                <span
-                  className={`mono text-[12px] font-black tabular-nums ${w.side === "buy" ? "text-bull" : "text-bear"}`}
-                >
-                  {usd(w.usd)}
-                </span>
-                <span className="mono ml-1 text-[9px] text-muted-foreground">
-                  @ {formatPrice(w.symbol, w.price)}
-                </span>
-              </span>
-              <span className="mono shrink-0 text-[9px] text-muted-foreground">{ago(w.time)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function LiquidationFeed({ liqs }: { liqs: Liquidation[] }) {
-  return (
-    <div className="panel overflow-hidden">
-      <div className="border-b border-panel-border/60 px-3 py-2 text-sm font-black">
-        💥 Liquidaties
+        <div className="mono text-[9px] uppercase text-muted-foreground">tot release</div>
       </div>
-      {liqs.length === 0 ? (
-        <div className="p-4 text-center text-[11px] text-muted-foreground">
-          Wachten op liquidaties…
-        </div>
-      ) : (
-        <div className="max-h-[320px] divide-y divide-panel-border/60 overflow-y-auto">
-          {liqs.map((l) => (
-            <div key={l.id} className="flex items-center gap-2 px-3 py-1.5">
-              <span
-                className={`mono shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black ${l.side === "long" ? "bg-bear/15 text-bear" : "bg-bull/15 text-bull"}`}
-              >
-                {l.side === "long" ? "LONG REKT" : "SHORT REKT"}
-              </span>
-              <span className="mono w-16 shrink-0 text-[11px] font-black">{l.symbol}</span>
-              <span className="mono min-w-0 flex-1 truncate text-[12px] font-black tabular-nums">
-                {usd(l.usd)}
-                <span className="mono ml-1 text-[9px] font-normal text-muted-foreground">
-                  @ {formatPrice(l.symbol, l.price)}
-                </span>
-              </span>
-              <span className="mono shrink-0 text-[9px] text-muted-foreground">{ago(l.time)}</span>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

@@ -88,36 +88,6 @@ export const BROKERS: Broker[] = [
         pattern: /^[A-Za-z0-9._-]{3,}$/, patternHint: "Bijv. MetaQuotes-Demo" },
     ],
   },
-  {
-    id: "binance",
-    name: "Binance Futures",
-    logo: "🟡",
-    kind: "crypto",
-    desc: "USDT-M futures & spot. Zet IP whitelist aan voor extra veiligheid.",
-    keyLocation: "Binance → API Management → Create API",
-    pingUrl: "https://fapi.binance.com/fapi/v1/ping",
-    fields: [
-      { key: "apiKey", label: "API Key",
-        pattern: /^[A-Za-z0-9]{40,}$/, patternHint: "64 tekens alfanumeriek" },
-      { key: "secret", label: "API Secret", type: "password",
-        pattern: /^[A-Za-z0-9]{40,}$/, patternHint: "64 tekens alfanumeriek" },
-    ],
-  },
-  {
-    id: "bybit",
-    name: "Bybit",
-    logo: "🟠",
-    kind: "crypto",
-    desc: "Perpetuals & spot. Genereer een API key met trade rechten.",
-    keyLocation: "Bybit → API → Create New Key",
-    pingUrl: "https://api.bybit.com/v5/market/time",
-    fields: [
-      { key: "apiKey", label: "API Key",
-        pattern: /^[A-Za-z0-9]{16,}$/, patternHint: "Min. 16 tekens" },
-      { key: "secret", label: "API Secret", type: "password",
-        pattern: /^[A-Za-z0-9]{20,}$/, patternHint: "Min. 20 tekens" },
-    ],
-  },
 ];
 
 const KEY = "ara-brokers-v1";

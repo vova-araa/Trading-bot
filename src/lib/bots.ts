@@ -50,13 +50,12 @@ export type Bot = {
 const KEY = "ara-bots-v1";
 
 const DEFAULT_BOTS: Omit<Bot, "pnl" | "trades" | "winRate" | "start" | "deployed">[] = [
-  { id: "grid-btc", kind: "grid", name: "Grid Bot", symbol: "BTCUSD", emoji: "🤖", desc: "Koopt laag, verkoopt hoog in een zone. Werkt goed als de prijs op-en-neer gaat.", enabled: true },
-  { id: "grid-eth", kind: "grid", name: "Grid Bot", symbol: "ETHUSD", emoji: "🤖", desc: "Verdient aan kleine schommelingen. Zet aan en vergeet.", enabled: false },
-  { id: "dca-btc", kind: "dca", name: "DCA Bot", symbol: "BTCUSD", emoji: "📥", desc: "Koopt elke keer een klein beetje bij als de prijs daalt. Slim voor lange termijn.", enabled: true },
-  { id: "dca-sol", kind: "dca", name: "DCA Bot", symbol: "SOLUSD", emoji: "📥", desc: "Verlaagt je gemiddelde inkoopprijs automatisch.", enabled: false },
+  { id: "trend-gold", kind: "trend", name: "Gold Trend Bot", symbol: "XAUUSD", emoji: "🥇", desc: "Rijdt de trend op goud mee met de 200-EMA als filter.", enabled: true },
   { id: "signal-gold", kind: "signal", name: "Signal Bot", symbol: "XAUUSD", emoji: "📡", desc: "Luistert naar de scanner en opent trades op goud automatisch.", enabled: true },
-  { id: "signal-eur", kind: "signal", name: "Signal Bot", symbol: "EURUSD", emoji: "📡", desc: "Automatische entries op EUR/USD signalen.", enabled: false },
-  { id: "pump", kind: "pump", name: "Pump Screener", symbol: "ALL", emoji: "🚀", desc: "Zoekt munten die opeens hard omhoog gaan. Springt op de trein.", enabled: true },
+  { id: "signal-nas", kind: "signal", name: "Nasdaq Signal Bot", symbol: "NAS100", emoji: "💻", desc: "Automatische entries op Nasdaq-signalen uit de scanner.", enabled: false },
+  { id: "scalp-eur", kind: "scalper", name: "EUR/USD Scalper", symbol: "EURUSD", emoji: "⚡", desc: "Pakt kleine bewegingen op EUR/USD tijdens de London/NY sessie.", enabled: false },
+  { id: "trend-oil", kind: "trend", name: "Oil Trend Bot", symbol: "CL", emoji: "🛢️", desc: "Volgt de trend op ruwe olie (WTI).", enabled: false },
+  { id: "signal-gbp", kind: "signal", name: "GBP/USD Signal Bot", symbol: "GBPUSD", emoji: "📡", desc: "Automatische entries op GBP/USD signalen.", enabled: false },
 ];
 
 function load(): Bot[] {
