@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { currentPrice, formatPrice, onTick, SYMBOLS } from "@/lib/market-data";
 import { openPosition, type Side } from "@/lib/positions";
 import { createBotFromTrade } from "@/lib/bots";
-import { mt5Configured, mt5PlaceOrder } from "@/lib/mt5";
+import { mt5Configured, mt5PlaceOrder, mt5Positions } from "@/lib/mt5";
 import { isUnlocked } from "@/lib/broker-vault";
 import { liveTradingBlocked } from "@/lib/kill-switch";
 import { getRiskSettings } from "@/lib/risk-settings";
@@ -85,11 +85,22 @@ export function TradeTicket({
   }
 
   // Fill the lot size from your risk settings (risk % of balance ÷ SL distance).
-  function applyRiskSize() {
+  // Uses the live MT5 balance when connected, else the manual balance.
+  async function applyRiskSize() {
     const rs = getRiskSettings();
+    let balance = rs.manualBalance;
+    let source = "handmatig saldo";
+    if (mt5Configured() && isUnlocked()) {
+      const acc = await mt5Positions();
+      const bal = Number((acc.account as { balance?: unknown } | undefined)?.balance);
+      if (acc.ok && Number.isFinite(bal) && bal > 0) {
+        balance = bal;
+        source = "MT5-saldo";
+      }
+    }
     const res = computeLot({
       symbol: symbolId,
-      balance: rs.manualBalance,
+      balance,
       riskPct: rs.riskPerTradePct,
       entry: price,
       stopLoss: sl,
@@ -103,7 +114,7 @@ export function TradeTicket({
     setSize(res.lot);
     setFlash({
       ok: true,
-      msg: `Lot ${res.lot.toFixed(2)} · risk ≈ $${res.riskUsd.toFixed(2)} (${rs.riskPerTradePct}% van $${rs.manualBalance.toLocaleString("en-US")})${res.confident ? "" : " · ⚠ benaderd"}`,
+      msg: `Lot ${res.lot.toFixed(2)} · risk ≈ $${res.riskUsd.toFixed(2)} (${rs.riskPerTradePct}% van $${balance.toLocaleString("en-US")} ${source})${res.confident ? "" : " · ⚠ benaderd"}`,
     });
     setTimeout(() => setFlash(null), 4000);
   }
@@ -230,7 +241,7 @@ export function TradeTicket({
               ))}
             </div>
             <button
-              onClick={applyRiskSize}
+              onClick={() => void applyRiskSize()}
               title="Bereken de lot uit je risk% en stop-loss (Risk-paneel op de Bots-tab)"
               className="mono ml-auto rounded px-2 py-1 text-[10px] font-black uppercase tracking-wider text-primary hover:bg-primary/15"
             >
