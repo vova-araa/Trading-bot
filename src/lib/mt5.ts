@@ -88,6 +88,24 @@ export async function mt5Close(positionId: string): Promise<Mt5Response> {
   return post("/api/broker/mt5/close", { ...c, positionId });
 }
 
+/** Close every open MT5 position. Returns how many closed vs total. */
+export async function mt5CloseAll(): Promise<{
+  ok: boolean;
+  closed: number;
+  total: number;
+  error?: string;
+}> {
+  const list = await mt5Positions();
+  if (!list.ok) return { ok: false, closed: 0, total: 0, error: list.error };
+  const rows = (list.positions as { id: string }[]) ?? [];
+  let closed = 0;
+  for (const p of rows) {
+    const r = await mt5Close(p.id);
+    if (r.ok) closed++;
+  }
+  return { ok: closed === rows.length, closed, total: rows.length };
+}
+
 /** Verify a candidate credential set (used by the Brokers card "Test verbinding"). */
 export async function mt5TestConnection(values: {
   token: string;

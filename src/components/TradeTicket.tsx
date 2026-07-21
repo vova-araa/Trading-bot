@@ -4,6 +4,9 @@ import { openPosition, type Side } from "@/lib/positions";
 import { createBotFromTrade } from "@/lib/bots";
 import { mt5Configured, mt5PlaceOrder } from "@/lib/mt5";
 import { isUnlocked } from "@/lib/broker-vault";
+import { liveTradingBlocked } from "@/lib/kill-switch";
+import { getRiskSettings } from "@/lib/risk-settings";
+import { computeLot } from "@/lib/position-sizing";
 
 type ExecMode = "paper" | "mt5";
 
@@ -81,8 +84,41 @@ export function TradeTicket({
     onPlaced?.();
   }
 
+  // Fill the lot size from your risk settings (risk % of balance ÷ SL distance).
+  function applyRiskSize() {
+    const rs = getRiskSettings();
+    const res = computeLot({
+      symbol: symbolId,
+      balance: rs.manualBalance,
+      riskPct: rs.riskPerTradePct,
+      entry: price,
+      stopLoss: sl,
+      maxLot: rs.maxLot,
+    });
+    if (!res) {
+      setFlash({ ok: false, msg: "Kan lot niet berekenen — check SL en risk-instellingen." });
+      setTimeout(() => setFlash(null), 3000);
+      return;
+    }
+    setSize(res.lot);
+    setFlash({
+      ok: true,
+      msg: `Lot ${res.lot.toFixed(2)} · risk ≈ $${res.riskUsd.toFixed(2)} (${rs.riskPerTradePct}% van $${rs.manualBalance.toLocaleString("en-US")})${res.confident ? "" : " · ⚠ benaderd"}`,
+    });
+    setTimeout(() => setFlash(null), 4000);
+  }
+
   // Real MT5 order — only after the explicit confirm step (see the button area).
   async function placeReal() {
+    if (liveTradingBlocked()) {
+      setConfirming(false);
+      setFlash({
+        ok: false,
+        msg: "🛑 Kill-switch actief — live orders geblokkeerd. Reset in Risk-paneel.",
+      });
+      setTimeout(() => setFlash(null), 5000);
+      return;
+    }
     setBusy(true);
     setFlash(null);
     const res = await mt5PlaceOrder({
@@ -193,6 +229,13 @@ export function TradeTicket({
                 </button>
               ))}
             </div>
+            <button
+              onClick={applyRiskSize}
+              title="Bereken de lot uit je risk% en stop-loss (Risk-paneel op de Bots-tab)"
+              className="mono ml-auto rounded px-2 py-1 text-[10px] font-black uppercase tracking-wider text-primary hover:bg-primary/15"
+            >
+              🎯 Risk%
+            </button>
           </div>
         </div>
 

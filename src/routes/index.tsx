@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { SignalCard } from "@/components/SignalCard";
 import { BotCard } from "@/components/BotCard";
 import { BotMarketplace } from "@/components/BotMarketplace";
+import { RiskPanel } from "@/components/RiskPanel";
 import { BotEditor } from "@/components/BotEditor";
 import { BotShareDialog } from "@/components/BotShareDialog";
 import { PumpScreener } from "@/components/PumpScreener";
@@ -21,6 +22,7 @@ import { PredictionMarkets } from "@/components/PredictionMarkets";
 import { startPositionEngine } from "@/lib/positions";
 import { startFlowRadar } from "@/lib/flow-radar";
 import { startBotLiveExec } from "@/lib/bot-live-exec";
+import { startKillSwitch } from "@/lib/kill-switch";
 import {
   buildCandles,
   currentPrice,
@@ -106,6 +108,7 @@ function Home() {
     startNewsNotifier();
     startFlowRadar();
     startBotLiveExec();
+    startKillSwitch();
     void registerAraServiceWorker();
   }, []);
   useEffect(() => {
@@ -357,6 +360,7 @@ function Home() {
               </div>
             ) : (
               <>
+                <RiskPanel />
                 <BotStatusPanel />
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {bots.map((b) => <BotCard key={b.id} bot={b} onEdit={setEditing} />)}

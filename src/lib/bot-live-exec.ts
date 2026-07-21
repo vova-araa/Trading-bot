@@ -12,6 +12,7 @@ import { getBots, logBotLive, type Bot } from "./bots";
 import { currentPrice } from "./market-data";
 import { mt5Configured, mt5PlaceOrder } from "./mt5";
 import { isUnlocked } from "./broker-vault";
+import { liveTradingBlocked } from "./kill-switch";
 
 const COOLDOWN_MS = 5 * 60_000; // one live order per bot per 5 min
 const lastLiveAt = new Map<string, number>();
@@ -71,7 +72,9 @@ export function startBotLiveExec() {
   started = true;
 
   onFlow((e) => {
-    // Gate on connection state up front so we never read a locked vault.
+    // Kill-switch and connection gates up front — never read a locked vault,
+    // never fire while the daily-loss stop is active.
+    if (liveTradingBlocked()) return;
     if (!mt5Configured() || !isUnlocked()) return;
     const candidates = getBots().filter(
       (b) => b.live && b.enabled && b.deployed && (b.symbol === e.symbol || b.symbol === "ALL"),

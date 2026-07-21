@@ -345,6 +345,18 @@ export function removeBot(id: string) {
 }
 
 
+/** Switch live MT5 execution OFF for every bot (used by the kill-switch). */
+export function disableAllLive(reason = "Kill-switch: live executie gestopt"): number {
+  let n = 0;
+  bots = bots.map((b) => {
+    if (!b.live) return b;
+    n += 1;
+    return { ...b, live: false, alerts: pushAlert(b, "warn", reason) };
+  });
+  if (n > 0) emit();
+  return n;
+}
+
 /** Record a real MT5 order (or its rejection) on a bot's timeline. */
 export function logBotLive(id: string, level: BotAlert["level"], text: string, counts = false) {
   const now = Date.now();
